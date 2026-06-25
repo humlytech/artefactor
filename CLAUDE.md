@@ -2,15 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S1 done; building feature slices
+## Status: S2 done; building feature slices
 
-**S0 (scaffold) and S1 (Identity via BetterAuth) are complete** — the monolith builds, runs,
-migrates, and tests green. Auth is wired (`src/server/auth.ts`): email + password via
-BetterAuth's Drizzle adapter, a session middleware + `requireAuth` guard, and a protected
-`GET /api/me` (see `docs/specs/fdd/slice-dag.md` §S1 implementation notes). Next up is **S2**
-(Create artefact), then the domain slices per the FDD DAG. Development is **spec-driven**:
-locate the governing DDD invariant and FDD slice before coding, build test-first, and keep
-spec ↔ tests ↔ code in sync in the same change.
+**S0 (scaffold), S1 (Identity), and S2 (Create artefact) are complete** — the monolith
+builds, runs, migrates, and tests green. Auth is wired (`src/server/auth.ts`): email +
+password via BetterAuth's Drizzle adapter, session middleware + `requireAuth` guard, and a
+protected `GET /api/me`. S2 adds the first Artefact Hosting slice: a Drizzle
+`ArtefactRepository`, a create-artefact application command (payload store + factory + repo),
+and `POST /api/artefacts` (authenticated multipart upload → `active`/`private`). See
+`docs/specs/fdd/slice-dag.md` §S1–S2 implementation notes. Next up is **S3/S4/S5/S7/S10/S11**
+(the slices that depend on S2) per the FDD DAG. Development is **spec-driven**: locate the
+governing DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests
+↔ code in sync in the same change.
 
 ### Architecture at a glance
 

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { signIn, signUp, signOut, useSession } from "$lib/auth";
-  import type { MeResponse } from "../shared/contracts";
+  import { ARTEFACT_KINDS } from "../domain/artefact/kind";
+  import type { ArtefactSummary, MeResponse } from "../shared/contracts";
 
   const session = useSession();
 
@@ -44,6 +45,41 @@
       meError = `${res.status} ${res.statusText}`;
     }
   }
+
+  // S2 — create artefact (manual HTML upload).
+  let aTitle = $state("");
+  let aKind = $state<string>(ARTEFACT_KINDS[0]);
+  let aFiles = $state<FileList | null>(null);
+  let aBusy = $state(false);
+  let aError = $state<string | null>(null);
+  let created = $state<ArtefactSummary | null>(null);
+
+  async function createArtefact(e: SubmitEvent) {
+    e.preventDefault();
+    aError = null;
+    created = null;
+    const file = aFiles?.[0];
+    if (!file) {
+      aError = "Choose an HTML file to upload";
+      return;
+    }
+    const form = new FormData();
+    form.set("title", aTitle);
+    form.set("kind", aKind);
+    form.set("payload", file);
+
+    aBusy = true;
+    const res = await fetch("/api/artefacts", { method: "POST", body: form });
+    aBusy = false;
+    if (res.ok) {
+      created = await res.json();
+      aTitle = "";
+      aFiles = null;
+    } else {
+      const body = await res.json().catch(() => ({}));
+      aError = body.error ?? `${res.status} ${res.statusText}`;
+    }
+  }
 </script>
 
 <main class="mx-auto max-w-md space-y-6 p-8">
@@ -68,6 +104,42 @@
           )}</pre>
       {:else if meError}
         <p class="text-sm text-red-600">/api/me failed: {meError}</p>
+      {/if}
+    </section>
+
+    <section class="space-y-3 border-t pt-6">
+      <h2 class="text-lg font-medium">New artefact</h2>
+      <form class="space-y-3" onsubmit={createArtefact}>
+        <input
+          class="w-full rounded border px-3 py-2 text-sm"
+          placeholder="Title"
+          bind:value={aTitle}
+          required
+        />
+        <select
+          class="w-full rounded border px-3 py-2 text-sm"
+          bind:value={aKind}
+        >
+          {#each ARTEFACT_KINDS as kind (kind)}
+            <option value={kind}>{kind}</option>
+          {/each}
+        </select>
+        <input
+          class="w-full text-sm"
+          type="file"
+          accept=".html,.htm,text/html"
+          bind:files={aFiles}
+        />
+        {#if aError}
+          <p class="text-sm text-red-600">{aError}</p>
+        {/if}
+        <Button type="submit" disabled={aBusy}>Upload artefact</Button>
+      </form>
+      {#if created}
+        <div class="rounded bg-green-50 p-3 text-sm">
+          Created <strong>{created.title}</strong> ({created.kind}) —
+          {created.visibility}, {created.payloadBytes} bytes.
+        </div>
       {/if}
     </section>
   {:else}

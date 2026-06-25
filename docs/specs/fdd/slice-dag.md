@@ -66,11 +66,30 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   user up against a throwaway SQLite db and round-trips `/api/me` (covers IA 1). A shared
   `src/test/setup.ts` points each test run at a temp DB.
 
-### S2 — Create artefact
+### S2 — Create artefact — **done**
 - Authenticated owner creates an artefact from title + kind + HTML upload.
 - New artefact is `active` / `private`, `publicSlug = null`. *(AH create)*
 - Rejects empty payload, oversize payload, empty title. *(AH 2, 3)*
 - `ownerId` = current session user. *(AH 1)*
+
+**Implementation notes (from building S2):**
+- The pure-domain `createArtefact` factory (+ its invariant tests) already landed in S0;
+  S2 is the vertical slice around it. **Drizzle adapter** for the `ArtefactRepository` port
+  (`src/infra/db/artefact-repository.drizzle.ts`) — `save` is an upsert by id so it also
+  serves later mutation slices; `findById`/`findBySlug` map row ↔ aggregate.
+- **Application command** (`src/server/artefacts/create-artefact.command.ts`) wires the
+  `PayloadStore` + repo around the factory: cheap pre-validation (kind, empty/oversize
+  payload) avoids needless filesystem writes, the factory stays the AH-invariant authority,
+  and a stored payload is deleted again if the aggregate is rejected (no orphans).
+- **BFF endpoint** `POST /api/artefacts` (`src/server/routes/artefacts.ts`): `requireAuth`
+  → session user is the `ownerId` (AH1); `multipart/form-data` with `title`, `kind`, and an
+  HTML `payload` file (oversize rejected before buffering); `InvariantViolation → 400`,
+  success → `201` `ArtefactSummary`. Adapters constructed once in `routes/index.ts`.
+- **Client** (`App.svelte`): a signed-in upload form (title + kind select from
+  `ARTEFACT_KINDS` + file input) posting the multipart body.
+- **Tests:** command unit test with in-memory repo + a recording fake payload store (asserts
+  invariants and no orphan payload), plus an end-to-end `artefacts.test.ts` (sign-up → upload
+  → 201/401/400 + Drizzle round-trip through the `owner_id` FK).
 
 ### S3 — Edit artefact
 - Owner updates title / kind / payload; `updatedAt` bumps.
