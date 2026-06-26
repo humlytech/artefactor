@@ -18,10 +18,12 @@ export interface DataRoutesDeps {
 }
 
 // S11 — Artefact Data: the caller's own blob. Mounted at
-// `/api/artefacts/:slug/data`, so handlers read `:slug` from the mount path. All
-// three require auth (no anonymous writes — AD3; reads here are the caller's own
-// entry). Slug resolution + the access matrix + archived→404 live in the
-// commands; this module just maps the domain outcome to HTTP.
+// `/api/artefacts/:ref/data`, where `:ref` is the artefact's slug or its id (the
+// id form is the alias that gives a never-shared artefact a data store, and is
+// what the owner-preview serving path uses). All three require auth (no
+// anonymous writes — AD3; reads here are the caller's own entry). Ref resolution
+// + the access matrix + archived→404 live in the commands; this module just maps
+// the domain outcome to HTTP.
 export function createDataRoutes(deps: DataRoutesDeps) {
   const r = new Hono<AuthEnv>();
   const commandDeps: OwnDataDeps = {
@@ -29,16 +31,16 @@ export function createDataRoutes(deps: DataRoutesDeps) {
     dataRepo: deps.dataRepo,
   };
 
-  // `:slug` comes from the mount path (`/api/artefacts/:slug/data`), so it is
+  // `:ref` comes from the mount path (`/api/artefacts/:ref/data`), so it is
   // always present at runtime though Hono types it as optional.
-  const slugOf = (c: { req: { param: (k: "slug") => string | undefined } }) =>
-    c.req.param("slug") ?? "";
+  const refOf = (c: { req: { param: (k: "ref") => string | undefined } }) =>
+    c.req.param("ref") ?? "";
 
   // The caller's own entry (AD-table `/data/me`). 200 with `blob: null` when none.
   r.get("/me", requireAuth, async (c) => {
     try {
       const entry = await getOwnDataEntry(
-        { slug: slugOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c) },
         commandDeps,
       );
       return c.json<DataEntryResponse>({
@@ -56,7 +58,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
     const blob = await c.req.text();
     try {
       const entry = await putOwnDataEntry(
-        { slug: slugOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c) },
         blob,
         commandDeps,
       );
@@ -76,7 +78,7 @@ export function createDataRoutes(deps: DataRoutesDeps) {
   r.delete("/me", requireAuth, async (c) => {
     try {
       await deleteOwnDataEntry(
-        { slug: slugOf(c), authorId: ownerId(c) },
+        { ref: refOf(c), authorId: ownerId(c) },
         commandDeps,
       );
       return c.body(null, 204);

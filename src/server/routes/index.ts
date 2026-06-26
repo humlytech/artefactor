@@ -65,13 +65,14 @@ export function createApiRoutes() {
     createArtefactRoutes({
       repo: artefactRepository,
       payloadStore,
+      dataRepo: dataRepository,
     }),
   );
 
-  // S11 — Artefact Data: the caller's own blob, addressed by the artefact slug.
-  // Mounted with the `:slug` param so the data handlers resolve the artefact.
+  // S11 — Artefact Data: the caller's own blob, addressed by the artefact slug
+  // or id. Mounted with the `:ref` param so the data handlers resolve the artefact.
   api.route(
-    "/artefacts/:slug/data",
+    "/artefacts/:ref/data",
     createDataRoutes({ artefactRepo: artefactRepository, dataRepo: dataRepository }),
   );
 

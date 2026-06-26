@@ -65,7 +65,27 @@ describe("serve artefact by slug (S6)", () => {
     const res = await get(a.publicSlug!);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
-    expect(await res.text()).toBe(HTML);
+    const body = await res.text();
+    // Trusted payload, plus the S13 localStorage bootstrap (read-only for the
+    // anonymous viewer — seeded empty, no write-through).
+    expect(body).toContain(HTML);
+    expect(body).toContain(`/api/artefacts/${a.publicSlug}/data/me`);
+    expect(body).toContain('"writable":false');
+  });
+
+  it("seeds the signed-in owner's own data context (read-write) into the page", async () => {
+    const a = await makeArtefact("public");
+    // Owner persists some data, then re-fetches the served page.
+    await app.request(`/api/artefacts/${a.publicSlug}/data/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", cookie: ownerCookie },
+      body: '{"theme":"dark"}',
+    });
+    const body = await (await get(a.publicSlug!, ownerCookie)).text();
+    expect(body).toContain('"writable":true');
+    // The seed blob is inlined so first reads are synchronous.
+    expect(body).toContain('theme');
+    expect(body).toContain('dark');
   });
 
   it("serves an authenticated artefact to signed-in users but not the anonymous", async () => {
