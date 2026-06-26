@@ -19,6 +19,8 @@ import {
   restoreArtefactCommand,
 } from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
+import { renderServedArtefact } from "../runtime/render";
+import type { DataRepository } from "../../domain/data/data-repository";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
   ArtefactListResponse,
@@ -26,9 +28,15 @@ import type {
   SetVisibilityRequest,
 } from "../../shared/contracts";
 
+// Route-level deps: the command deps plus the data repo needed to seed the S13
+// localStorage bootstrap when serving the owner-preview HTML.
+export type ArtefactRoutesDeps = CreateArtefactDeps & {
+  dataRepo: DataRepository;
+};
+
 // BFF routes for the Artefact Hosting context. S2 adds manual HTML upload;
 // API-push ingestion (S9) reuses the same command behind key auth.
-export function createArtefactRoutes(deps: CreateArtefactDeps) {
+export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
   const r = new Hono<AuthEnv>();
 
   // S10 — Owner dashboard. The signed-in owner lists their own artefacts;
@@ -67,15 +75,22 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
 
   // S4 — Owner views own artefact content. Serves the owner's trusted HTML
   // as-is, by id, at any visibility — the in-app preview path (the `/a/:slug`
-  // route in S6 only works once an artefact is shared). Archived → 404.
+  // route in S6 only works once an artefact is shared). The S13 localStorage
+  // bootstrap is injected and seeded with the owner's data context, addressed by
+  // id (so a never-shared private artefact still persists). Archived → 404.
   r.get("/:id/raw", requireAuth, async (c) => {
     try {
       const artefact = await loadOwnActiveArtefact(deps.repo, {
         id: c.req.param("id"),
         ownerId: ownerId(c),
       });
-      const bytes = await deps.payloadStore.get(artefact.payloadRef);
-      return c.html(new TextDecoder().decode(bytes));
+      const html = await renderServedArtefact(
+        artefact,
+        artefact.id,
+        ownerId(c),
+        deps,
+      );
+      return c.html(html);
     } catch (err) {
       if (err instanceof ArtefactNotFound) return c.notFound();
       throw err;

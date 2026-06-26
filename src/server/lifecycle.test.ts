@@ -74,7 +74,7 @@ describe("edit + archive/restore (S3, S7)", () => {
       const a = await create(owner, "WithPayload", "<h1>v1</h1>");
       expect((await patch(a.id, { payload: new File(["<h1>v2</h1>"], "b.html") }, owner)).status).toBe(200);
       const raw = await app.request(`/api/artefacts/${a.id}/raw`, { headers: { cookie: owner } });
-      expect(await raw.text()).toBe("<h1>v2</h1>");
+      expect(await raw.text()).toContain("<h1>v2</h1>");
     });
 
     it("rejects an empty title (400), a non-owner (404) and the anonymous (401)", async () => {

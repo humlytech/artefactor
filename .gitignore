@@ -5,8 +5,9 @@ node_modules/
 dist/
 .vite/
 
-# Runtime state (SQLite db + artefact payloads)
-data/
+# Runtime state (SQLite db + artefact payloads). Root-anchored so it does not
+# swallow source directories like src/domain/data or src/server/data.
+/data/
 
 # Test / coverage
 coverage/

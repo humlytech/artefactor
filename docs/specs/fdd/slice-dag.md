@@ -224,10 +224,36 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   hidden / opt-in) and an end-to-end dashboard test (fresh user → exact-count list, newest
   first, excludes archived + other owners, 401 unauth).
 
-### S11 — Store: read/write own data blob
+### S11 — Store: read/write own data blob — **done** *(shipped with S13)*
 - Authenticated viewer upserts their own JSON blob for an artefact (one per author). *(AD 1, 2, 3)*
 - `GET …/data/me` returns the caller's blob; rejects oversize/invalid JSON. *(AD 8)*
 - Unauthenticated write rejected; archived artefact → 404. *(AD 3, 6)*
+
+**Implementation notes (from building S11):**
+- **New bounded context** `src/domain/data/`: the `DataEntry` aggregate (opaque `blob` text,
+  `MAX_BLOB_BYTES = 5 MB`), `assertBlobWithinBounds` (size-then-`JSON.parse`, AD8),
+  `upsertDataEntry` (one per `(artefact, author)`, preserves id/createdAt, bumps updatedAt),
+  the `DataRepository` port + in-memory double, and `InvalidBlob`/`BlobTooLarge` errors.
+- **Drizzle adapter** (`infra/db/data-repository.drizzle.ts`) upserts on the
+  `(artefact_id, author_id)` unique pair; the `data_entry` table already existed from S0.
+- **Addressing:** the data API is keyed by an artefact **reference** `:ref` that is its slug
+  **or** its id — the command resolver tries `findBySlug` then `findById` (slugs are
+  base64url, ids are uuids, so the fallback can't mis-resolve). The id form is the alias that
+  gives a **never-shared** private artefact (no slug) a data store, and is what the
+  owner-preview serving path writes through. Access is resolved through the **Artefact access
+  matrix** — `canViewArtefact` reused — so a viewer can only touch data on an artefact they
+  can see; archived / not-viewable / unknown ref all collapse to `404` (AD4, AD6).
+- **Commands** (`src/server/data/own-data.command.ts`): `get` / `put` / `delete` own entry,
+  all gated by the slug+access resolver. `authorId` is always the authenticated caller (AD2,
+  AD3) — there is no anonymous write.
+- **BFF** (`routes/data.ts`, mounted at `/api/artefacts/:ref/data`): `GET /me` (200 with
+  `blob: null` when none), `PUT /me` (raw JSON body, `InvalidBlob → 400`, `BlobTooLarge →
+  413`), `DELETE /me` (204). All `requireAuth`; `ArtefactNotFound → 404`.
+- **Tests:** domain unit (blob bounds, upsert), command unit (per-author isolation, access/
+  archived gating, delete), and an end-to-end `data.test.ts` (upsert/read, `blob:null`,
+  per-author separation, `400`/`401`/`413`, archived `404`, private non-owner `404`, delete).
+- The author-listing + per-author endpoints (S12) and the localStorage runtime shim (S13)
+  build on this; no client UI yet (S11 is the API surface they consume).
 
 ### S12 — Host UI: data-context switcher
 - A signed-in viewer with read access can list authors who have data and load another
@@ -236,7 +262,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   only; authenticated → signed-in; public → anyone. *(AD 4)*
 - This lives entirely in the host (BFF + Svelte chrome); the artefact stays opaque.
 
-### S13 — Artefact runtime bootstrap (localStorage hijack)
+### S13 — Artefact runtime bootstrap (localStorage hijack) — **done** *(shipped with S11)*
 - Served artefacts get an injected shim that **replaces `window.localStorage`** with a
   backend-backed store, **seeded server-side** with the current data context so reads are
   synchronous; writes are write-through + debounced with a `pagehide` beacon flush. *(AD runtime contract §1)*
@@ -244,6 +270,30 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   only, no `ARTEFACTOR` helper.
 - Over-cap write throws `QuotaExceededError`; a read-only context (logged-out public viewer,
   or another author's data loaded via S12) throws on write while seeded reads still work. *(AD 3, 5, 8)*
+
+**Implementation notes (from building S13):**
+- **Shim** (`src/server/runtime/localstorage-bootstrap.ts`): an inline IIFE that models the
+  whole localStorage keyspace as one JSON object (= the `DataEntry.blob`), exposes the full
+  synchronous `localStorage` API (`getItem`/`setItem`/`removeItem`/`clear`/`key`/`length`),
+  and replaces `window.localStorage` via `Object.defineProperty`. Reads hit the seeded
+  in-memory map; writes update it then debounce a `PUT :endpoint` (`fetch` with
+  `keepalive:true` — the credentialed, PUT-capable replacement for `sendBeacon`), with a
+  `pagehide`/`visibilitychange` flush. Over-cap → `QuotaExceededError` (and the write is
+  reverted); a read-only context throws on every write. The seed/config is inlined as JSON
+  with `<` escaped so a blob can't break out of the `<script>`. No `window.ARTEFACTOR`.
+- **Injection** (`injectBootstrap`): placed right after `<head>` (else `<html>`, else
+  prepended) so it runs before any artefact script. The artefact is unchanged.
+- **Seeding** (`runtime/render.ts`): on serve, the BFF loads the viewer's own `DataEntry` and
+  inlines it. Both serving paths inject it — `GET /a/:slug` (S6, writes back via the slug)
+  and the owner preview `GET /api/artefacts/:id/raw` (S4, writes back via the id alias). An
+  authenticated viewer gets a read-write context seeded with their own blob; an unauthenticated
+  public viewer gets an empty read-only one (no anonymous writes — AD3/AD5).
+- **S12 deferred:** loading *another* author's blob read-only (the host data-context switcher)
+  is S12; S13 ships the own-context (default) seeding and the read-only mechanism it will reuse.
+- **Tests:** the shim is unit-tested by **evaluating the generated JS** with mocked browser
+  globals (seeded reads, write-through PUT, debounce/pagehide flush, over-cap + read-only →
+  `QuotaExceededError`) plus injection/escaping tests; integration tests assert the bootstrap
+  is injected and seeded with the viewer's own data (read-write) vs anonymous (read-only).
 
 ### S14 — Browse gallery — **done**
 - A signed-in user browses artefacts shared to them (`authenticated` + `public`), grouped by

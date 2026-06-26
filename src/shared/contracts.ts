@@ -44,3 +44,12 @@ export interface ArtefactListResponse {
 export interface SetVisibilityRequest {
   visibility: ArtefactSummary["visibility"];
 }
+
+// S11 — Artefact Data. The caller's own opaque JSON blob for an artefact
+// (`GET`/`PUT /api/artefacts/:slug/data/me`). `blob` is the raw JSON text,
+// stored and returned verbatim; `null` when the caller has no entry yet. The
+// PUT request body is the raw blob itself, not this wrapper.
+export interface DataEntryResponse {
+  blob: string | null;
+  updatedAt: string | null;
+}

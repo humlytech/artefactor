@@ -266,7 +266,8 @@ describe("create artefact (S2)", () => {
       });
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
-      expect(await res.text()).toBe("<h1>mine</h1>");
+      // The served HTML carries the artefact content plus the injected runtime.
+      expect(await res.text()).toContain("<h1>mine</h1>");
     });
 
     it("hides the artefact from a non-owner with 404 (AH8)", async () => {
