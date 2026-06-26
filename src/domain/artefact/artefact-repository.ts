@@ -18,8 +18,9 @@ export interface ArtefactRepository {
     ownerId: string,
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]>;
-  // Active artefacts shared to signed-in users — visibility `authenticated` or
-  // `public`, across all owners — most-recently-updated first. The browse
-  // gallery (S14); private artefacts never appear (AH8).
-  listShared(): Promise<Artefact[]>;
+  // Active artefacts shared *to* the viewer — visibility `authenticated` or
+  // `public` — most-recently-updated first. The browse gallery (S14): "shared
+  // with you" means *others'* artefacts, so the viewer's own are excluded (they
+  // live on the owner dashboard). Private never appears (AH8).
+  listShared(viewerId: string): Promise<Artefact[]>;
 }

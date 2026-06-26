@@ -225,7 +225,7 @@ describe("InMemoryArtefactRepository", () => {
   });
 
   describe("listShared (S14)", () => {
-    it("returns active authenticated+public across owners, never private/archived", async () => {
+    const seed = async () => {
       const repo = new InMemoryArtefactRepository();
       const make = (id: string, over: Partial<ReturnType<typeof createArtefact>>) =>
         repo.save({ ...createArtefact({ ...base, id }), ...over });
@@ -234,9 +234,21 @@ describe("InMemoryArtefactRepository", () => {
       await make("auth", { ownerId: "u2", visibility: "authenticated" });
       await make("priv", { ownerId: "u2", visibility: "private" });
       await make("arch", { ownerId: "u1", visibility: "public", status: "archived" });
+      return repo;
+    };
 
-      const shared = await repo.listShared();
+    it("returns active authenticated+public across owners, never private/archived", async () => {
+      const repo = await seed();
+      // Viewer owns none of them → sees every shared artefact across owners.
+      const shared = await repo.listShared("u3");
       expect(shared.map((a) => a.id).sort()).toEqual(["auth", "pub"]);
+    });
+
+    it("excludes the viewer's own shared artefacts (they live on the dashboard)", async () => {
+      const repo = await seed();
+      // u1 owns "pub" → it drops out; only u2's "auth" remains.
+      const shared = await repo.listShared("u1");
+      expect(shared.map((a) => a.id).sort()).toEqual(["auth"]);
     });
   });
 });

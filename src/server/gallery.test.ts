@@ -3,8 +3,8 @@ import type { Hono } from "hono";
 import type { ArtefactSummary } from "../shared/contracts";
 
 // End-to-end S14: the signed-in browse gallery. Two owners publish artefacts at
-// various tiers; a signed-in viewer should see every shared artefact (across
-// owners) and none of anyone's private ones.
+// various tiers; a signed-in viewer sees others' shared artefacts (across
+// owners), but not their own (those live on the dashboard) nor anyone's private.
 describe("browse gallery (S14)", () => {
   let app: Hono;
   let alice: string;
@@ -67,14 +67,18 @@ describe("browse gallery (S14)", () => {
     expect((await gallery()).status).toBe(401);
   });
 
-  it("lists shared artefacts across owners, excluding others' private", async () => {
+  it("lists others' shared artefacts, excluding the viewer's own and others' private", async () => {
     const res = await gallery(bob);
     expect(res.status).toBe(200);
     const { artefacts } = (await res.json()) as { artefacts: ArtefactSummary[] };
     const titles = artefacts.map((a) => a.title).sort();
-    expect(titles).toEqual(["Alice authenticated", "Alice public", "Bob public"]);
+    // Bob sees Alice's shared artefacts, but NOT his own "Bob public" (that
+    // lives on his dashboard) and NOT Alice's private one.
+    expect(titles).toEqual(["Alice authenticated", "Alice public"]);
+    expect(titles).not.toContain("Bob public");
     expect(titles).not.toContain("Alice private");
-    // Every listed artefact is active and shared, and carries a slug to open.
+    // Every listed artefact is active, shared, owned by someone else, and has a
+    // slug to open.
     expect(
       artefacts.every(
         (a) =>

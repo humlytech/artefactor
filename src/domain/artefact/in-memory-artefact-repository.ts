@@ -40,11 +40,12 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
       .map((a) => ({ ...a }));
   }
 
-  async listShared(): Promise<Artefact[]> {
+  async listShared(viewerId: string): Promise<Artefact[]> {
     return [...this.store.values()]
       .filter(
         (a) =>
           a.status === "active" &&
+          a.ownerId !== viewerId &&
           (a.visibility === "authenticated" || a.visibility === "public"),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())

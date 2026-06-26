@@ -54,11 +54,12 @@ export function createApiRoutes() {
   });
 
   // S14 — Browse gallery. Signed-in users only (unauthenticated access is by
-  // slug link only). Lists active artefacts shared to them (`authenticated` +
-  // `public`) across all owners; others' private artefacts never appear (AH8).
-  // The client groups/filters by kind.
+  // slug link only). Lists active artefacts shared *to* the caller
+  // (`authenticated` + `public`) across *other* owners; their own artefacts
+  // (on the dashboard) and anyone's private ones never appear (AH8). The client
+  // groups/filters by kind.
   api.get("/gallery", requireAuth, async (c) => {
-    const artefacts = await artefactRepository.listShared();
+    const artefacts = await artefactRepository.listShared(c.get("user")!.id);
     return c.json<ArtefactListResponse>({
       artefacts: artefacts.map(toArtefactSummary),
     });

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { db as Db } from "./client";
 import { artefact } from "./schema";
 import type { Artefact } from "../../domain/artefact/artefact";
@@ -60,14 +60,16 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
     return rows.map(toAggregate);
   }
 
-  async listShared(): Promise<Artefact[]> {
-    // Uses the (status, visibility) index. Cross-owner; private never matches.
+  async listShared(viewerId: string): Promise<Artefact[]> {
+    // Uses the (status, visibility) index. Cross-owner but excludes the viewer's
+    // own (those live on their dashboard); private never matches.
     const rows = await this.db
       .select()
       .from(artefact)
       .where(
         and(
           eq(artefact.status, "active"),
+          ne(artefact.ownerId, viewerId),
           inArray(artefact.visibility, ["authenticated", "public"]),
         ),
       )

@@ -323,13 +323,15 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 
 ### S14 — Browse gallery — **done**
 - A signed-in user browses artefacts shared to them (`authenticated` + `public`), grouped by
-  kind; private artefacts of others never appear. *(AH 8)*
+  kind; their own artefacts (on the dashboard) and others' private ones never appear. *(AH 8)*
 
 **Implementation notes (from building S14):**
-- New repository port method **`listShared()`** — active artefacts with visibility
-  `authenticated` or `public`, across all owners, most-recently-updated first. Drizzle impl
-  uses the `(status, visibility)` index (`inArray`); in-memory mirrors it. Private never
-  matches (AH8). The viewer's own shared artefacts are included (they are visible to them).
+- Repository port method **`listShared(viewerId)`** — active artefacts with visibility
+  `authenticated` or `public`, across owners but **excluding the viewer's own**,
+  most-recently-updated first. Drizzle impl uses the `(status, visibility)` index (`inArray`)
+  plus `ne(ownerId, viewerId)`; in-memory mirrors it. Private never matches (AH8). *("Shared
+  with you" means **others'** artefacts — the viewer's own shared artefacts live on their
+  dashboard, not the gallery. This reverses the original S14 decision to include them.)*
 - BFF **`GET /api/gallery`** is `requireAuth` — the gallery is signed-in users only
   (unauthenticated access is by slug link only). Returns `ArtefactListResponse` via the
   shared `toArtefactSummary`; client groups by kind.
@@ -337,8 +339,9 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   `open` link to `/a/:slug` (the S6 serving route); reloads when the owner changes a
   visibility tier.
 - **Tests:** in-memory `listShared` unit (active authenticated+public across owners; excludes
-  private + archived) and an end-to-end gallery test (two owners → a signed-in viewer sees
-  every shared artefact across owners, never others' private; `401` unauthenticated).
+  private + archived; **excludes the viewer's own**) and an end-to-end gallery test (two owners
+  → a signed-in viewer sees others' shared artefacts, never their own nor others' private;
+  `401` unauthenticated).
 
 ## Build order
 
