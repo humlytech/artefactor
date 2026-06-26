@@ -101,11 +101,32 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - Owner can view their own `active` artefact at any visibility.
 - Archived gets 404 (reached only via dashboard restore). *(AH 7)*
 
-### S5 — Share / unshare
+### S5 — Share / unshare — **done**
 - Share raises visibility to `authenticated` or `public`; mints a unique slug on first
   share, reuses the retained slug thereafter; tier can be changed between the two. *(AH 4, 5, 6)*
 - Unshare sets `private`, retains slug. *(AH 5)*
 - Owner-only; blocked while archived. *(AH 7, 9)*
+
+**Implementation notes (from building S5):**
+- **Domain** (`artefact.ts`): pure `shareArtefact` (mint-once-via-supplied-slug / retain,
+  set tier, block while archived) and `unshareArtefact` (→ `private`, retain slug). New
+  `ArtefactNotFound` domain error covers both "missing" and "not yours" so a private
+  artefact's existence can't be probed (AH8).
+- **Slug** generation lives in the app layer (`src/server/artefacts/slug.ts`,
+  `randomBytes(8).base64url`) — the domain stays node-free, mirroring how the id is supplied
+  to the create factory. Uniqueness (AH6) is enforced by the command, which collision-checks
+  generated slugs against `repo.findBySlug` and regenerates.
+- **Command** (`set-visibility.command.ts`): one operation for all three transitions — loads
+  the artefact, treats a non-owner as not-found (AH9), mints a unique slug only on first
+  share, and delegates the transition + archived guard to the domain.
+- **BFF** `PUT /api/artefacts/:id/visibility` (`{ visibility }`): validates the tier,
+  maps `ArtefactNotFound → 404`, `InvariantViolation → 400`, returns the updated summary.
+- **Client** (`App.svelte`): a per-artefact visibility `<select>` in the dashboard that PUTs
+  the change and reloads; the share link appears once a slug exists.
+- **Tests:** domain unit (mint/retain/tier/archived/timestamps), command unit (slug reuse
+  across unshare→reshare, collision regen, non-owner/unknown → not-found), and end-to-end
+  (share mints slug, unshare retains + reshare reuses, invalid tier 400, unauth 401,
+  non-owner 404).
 
 ### S6 — Serve artefact by slug (access matrix)
 - Serving an `active` artefact by slug enforces the access matrix: `public` → anyone;

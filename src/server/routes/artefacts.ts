@@ -1,14 +1,20 @@
 import { Hono } from "hono";
 import { MAX_PAYLOAD_BYTES, type Artefact } from "../../domain/artefact/artefact";
-import { InvariantViolation } from "../../domain/artefact/errors";
+import {
+  ArtefactNotFound,
+  InvariantViolation,
+} from "../../domain/artefact/errors";
+import { VISIBILITIES } from "../../domain/artefact/visibility";
 import {
   createArtefactCommand,
   type CreateArtefactDeps,
 } from "../artefacts/create-artefact.command";
+import { setArtefactVisibilityCommand } from "../artefacts/set-visibility.command";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
   ArtefactListResponse,
   ArtefactSummary,
+  SetVisibilityRequest,
 } from "../../shared/contracts";
 
 // BFF routes for the Artefact Hosting context. S2 adds manual HTML upload;
@@ -24,6 +30,31 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
     return c.json<ArtefactListResponse>({
       artefacts: artefacts.map(toArtefactSummary),
     });
+  });
+
+  // S5 — Share / unshare. Owner sets the visibility tier; `private` unshares
+  // (retaining the slug), `authenticated`/`public` share (minting on first
+  // share). Non-owner or unknown id → 404 (existence is not leaked); archived
+  // → 400. Returns the updated summary (with the slug once shared).
+  r.put("/:id/visibility", requireAuth, async (c) => {
+    const body = await c.req
+      .json<Partial<SetVisibilityRequest>>()
+      .catch(() => ({}) as Partial<SetVisibilityRequest>);
+    const visibility = body.visibility;
+    if (!visibility || !VISIBILITIES.includes(visibility)) {
+      return c.json({ error: "visibility must be one of " + VISIBILITIES.join(", ") }, 400);
+    }
+    try {
+      const updated = await setArtefactVisibilityCommand(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c), visibility },
+        { repo: deps.repo },
+      );
+      return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
   });
 
   // S2 — Create artefact. Authenticated owner uploads title + kind + an HTML

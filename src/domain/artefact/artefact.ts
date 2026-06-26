@@ -65,3 +65,48 @@ export function createArtefact(input: CreateArtefactInput): Artefact {
     archivedAt: null,
   };
 }
+
+// The two shareable visibility tiers (everything except `private`).
+export type ShareableTier = Exclude<Visibility, "private">;
+
+export interface ShareOptions {
+  tier: ShareableTier;
+  // A freshly-minted, collision-checked slug — used only when the artefact has
+  // no retained slug yet. Ignored once a slug exists (AH5: mint once, retain).
+  newSlug?: string;
+  now?: Date;
+}
+
+// Share / change tier (AH4, 5, 6). Raises visibility to a shareable tier; mints
+// the slug the first time visibility leaves `private` and retains it thereafter.
+// Blocked while archived (AH7). Owner authority (AH9) is enforced by the caller.
+export function shareArtefact(a: Artefact, options: ShareOptions): Artefact {
+  if (a.status === "archived") {
+    throw new InvariantViolation("cannot share an archived artefact"); // AH7
+  }
+  const publicSlug = a.publicSlug ?? options.newSlug ?? null;
+  if (publicSlug === null) {
+    // A first-time share must supply a slug to mint (AH4).
+    throw new InvariantViolation("a slug must be provided to share an artefact");
+  }
+  return {
+    ...a,
+    visibility: options.tier,
+    publicSlug,
+    updatedAt: options.now ?? new Date(),
+  };
+}
+
+// Unshare (AH5): back to `private`, retaining the slug (the link 404s while
+// private). Blocked while archived (AH7).
+export function unshareArtefact(a: Artefact, options?: { now?: Date }): Artefact {
+  if (a.status === "archived") {
+    throw new InvariantViolation("cannot unshare an archived artefact"); // AH7
+  }
+  return {
+    ...a,
+    visibility: "private",
+    publicSlug: a.publicSlug, // retained
+    updatedAt: options?.now ?? new Date(),
+  };
+}

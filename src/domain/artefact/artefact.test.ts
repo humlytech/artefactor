@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createArtefact, MAX_PAYLOAD_BYTES } from "./artefact";
+import {
+  createArtefact,
+  shareArtefact,
+  unshareArtefact,
+  MAX_PAYLOAD_BYTES,
+} from "./artefact";
 import { InMemoryArtefactRepository } from "./in-memory-artefact-repository";
 import { InvariantViolation } from "./errors";
 
@@ -44,6 +49,59 @@ describe("createArtefact", () => {
   it("requires an owner (AH1)", () => {
     expect(() => createArtefact({ ...base, ownerId: "" })).toThrow(
       InvariantViolation,
+    );
+  });
+});
+
+describe("shareArtefact / unshareArtefact (S5)", () => {
+  it("mints the supplied slug on first share and sets the tier (AH4)", () => {
+    const a = createArtefact(base);
+    const shared = shareArtefact(a, { tier: "public", newSlug: "abc123" });
+    expect(shared.visibility).toBe("public");
+    expect(shared.publicSlug).toBe("abc123");
+  });
+
+  it("retains the existing slug when re-sharing, ignoring a new one (AH5)", () => {
+    const a = { ...createArtefact(base), publicSlug: "kept", visibility: "private" as const };
+    const shared = shareArtefact(a, { tier: "authenticated", newSlug: "ignored" });
+    expect(shared.publicSlug).toBe("kept");
+    expect(shared.visibility).toBe("authenticated");
+  });
+
+  it("changes tier between authenticated and public (AH6)", () => {
+    const a = { ...createArtefact(base), publicSlug: "s", visibility: "authenticated" as const };
+    expect(shareArtefact(a, { tier: "public" }).visibility).toBe("public");
+  });
+
+  it("requires a slug to share an artefact that has none (AH4)", () => {
+    expect(() => shareArtefact(createArtefact(base), { tier: "public" })).toThrow(
+      InvariantViolation,
+    );
+  });
+
+  it("unshare returns to private but retains the slug (AH5)", () => {
+    const shared = shareArtefact(createArtefact(base), {
+      tier: "public",
+      newSlug: "slug9",
+    });
+    const unshared = unshareArtefact(shared);
+    expect(unshared.visibility).toBe("private");
+    expect(unshared.publicSlug).toBe("slug9");
+  });
+
+  it("blocks share/unshare while archived (AH7)", () => {
+    const archived = { ...createArtefact(base), status: "archived" as const };
+    expect(() => shareArtefact(archived, { tier: "public", newSlug: "x" })).toThrow(
+      InvariantViolation,
+    );
+    expect(() => unshareArtefact(archived)).toThrow(InvariantViolation);
+  });
+
+  it("bumps updatedAt on transition", () => {
+    const a = createArtefact({ ...base, now: new Date("2026-01-01T00:00:00Z") });
+    const later = new Date("2026-02-01T00:00:00Z");
+    expect(shareArtefact(a, { tier: "public", newSlug: "s", now: later }).updatedAt).toEqual(
+      later,
     );
   });
 });

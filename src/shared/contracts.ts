@@ -37,3 +37,10 @@ export interface ArtefactSummary {
 export interface ArtefactListResponse {
   artefacts: ArtefactSummary[];
 }
+
+// S5 — Share / unshare. Set an artefact's visibility tier. `private` unshares
+// (retaining the slug); `authenticated`/`public` share (minting the slug on the
+// first share, reusing it thereafter).
+export interface SetVisibilityRequest {
+  visibility: ArtefactSummary["visibility"];
+}

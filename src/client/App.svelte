@@ -123,6 +123,20 @@
     if (!a.publicSlug) return null;
     return `${location.origin}/a/${a.publicSlug}`;
   }
+
+  async function changeVisibility(a: ArtefactSummary, visibility: string) {
+    listError = null;
+    const res = await fetch(`/api/artefacts/${a.id}/visibility`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visibility }),
+    });
+    if (res.ok) {
+      loadArtefacts();
+    } else {
+      listError = `Could not update visibility (${res.status})`;
+    }
+  }
 </script>
 
 <main class="mx-auto max-w-md space-y-6 p-8">
@@ -177,9 +191,16 @@
                 <li class="flex items-center justify-between gap-3 px-3 py-2">
                   <span class="truncate text-sm">{a.title}</span>
                   <span class="flex shrink-0 items-center gap-2 text-xs">
-                    <span class="rounded bg-zinc-100 px-2 py-0.5">
-                      {VISIBILITY_LABEL[a.visibility]}
-                    </span>
+                    <select
+                      class="rounded border px-1 py-0.5 text-xs"
+                      value={a.visibility}
+                      onchange={(e) =>
+                        changeVisibility(a, e.currentTarget.value)}
+                    >
+                      {#each Object.entries(VISIBILITY_LABEL) as [value, label] (value)}
+                        <option {value}>{label}</option>
+                      {/each}
+                    </select>
                     {#if shareUrl(a)}
                       <a class="text-blue-600 underline" href={shareUrl(a)}>
                         link

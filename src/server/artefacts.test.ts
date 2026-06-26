@@ -172,4 +172,70 @@ describe("create artefact (S2)", () => {
       expect(artefacts.some((a) => a.title === "Archived")).toBe(false);
     });
   });
+
+  // S5 — share / unshare via PUT /api/artefacts/:id/visibility.
+  describe("share / unshare (S5)", () => {
+    let id: string;
+
+    function setVisibility(visibility: string, cookieValue: string | null = cookie) {
+      return app.request(`/api/artefacts/${id}/visibility`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(cookieValue ? { cookie: cookieValue } : {}),
+        },
+        body: JSON.stringify({ visibility }),
+      });
+    }
+
+    beforeAll(async () => {
+      const res = await postArtefact({ title: "Sharable", kind: "prototype" });
+      id = ((await res.json()) as ArtefactSummary).id;
+    });
+
+    it("mints a slug and raises visibility on first share (AH4)", async () => {
+      const res = await setVisibility("public");
+      expect(res.status).toBe(200);
+      const a = (await res.json()) as ArtefactSummary;
+      expect(a.visibility).toBe("public");
+      expect(a.publicSlug).not.toBeNull();
+    });
+
+    it("retains the slug across unshare and reuses it on re-share (AH5)", async () => {
+      const shared = (await (await setVisibility("public")).json()) as ArtefactSummary;
+      const slug = shared.publicSlug;
+
+      const unshared = (await (await setVisibility("private")).json()) as ArtefactSummary;
+      expect(unshared.visibility).toBe("private");
+      expect(unshared.publicSlug).toBe(slug); // retained
+
+      const reshared = (await (
+        await setVisibility("authenticated")
+      ).json()) as ArtefactSummary;
+      expect(reshared.visibility).toBe("authenticated");
+      expect(reshared.publicSlug).toBe(slug); // reused
+    });
+
+    it("rejects an invalid visibility with 400", async () => {
+      expect((await setVisibility("everyone")).status).toBe(400);
+    });
+
+    it("rejects an unauthenticated request with 401", async () => {
+      expect((await setVisibility("public", null)).status).toBe(401);
+    });
+
+    it("hides existence from a non-owner with 404 (AH8/AH9)", async () => {
+      const other = await app.request("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "intruder@example.com",
+          password: "correct-horse-battery",
+          name: "Intruder",
+        }),
+      });
+      const otherCookie = other.headers.get("set-cookie")!.split(";")[0]!;
+      expect((await setVisibility("public", otherCookie)).status).toBe(404);
+    });
+  });
 });
