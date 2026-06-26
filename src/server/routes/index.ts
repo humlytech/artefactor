@@ -2,9 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "../auth";
 import { env } from "../env";
-import { db } from "../../infra/db/client";
-import { DrizzleArtefactRepository } from "../../infra/db/artefact-repository.drizzle";
-import { FilesystemPayloadStore } from "../../infra/storage/payload-store";
+import { artefactRepository, payloadStore } from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes } from "./artefacts";
 import type { MeResponse } from "../../shared/contracts";
@@ -46,13 +44,12 @@ export function createApiRoutes() {
     });
   });
 
-  // Artefact Hosting routes — share the domain ports' adapters (Drizzle repo +
-  // filesystem payload store), constructed once as the composition root.
+  // Artefact Hosting routes — share the domain ports' adapters (see adapters.ts).
   api.route(
     "/artefacts",
     createArtefactRoutes({
-      repo: new DrizzleArtefactRepository(db),
-      payloadStore: new FilesystemPayloadStore(env.ARTEFACTOR_PAYLOAD_DIR),
+      repo: artefactRepository,
+      payloadStore,
     }),
   );
 

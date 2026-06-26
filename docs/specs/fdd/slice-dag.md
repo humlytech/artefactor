@@ -128,10 +128,25 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   (share mints slug, unshare retains + reshare reuses, invalid tier 400, unauth 401,
   non-owner 404).
 
-### S6 — Serve artefact by slug (access matrix)
+### S6 — Serve artefact by slug (access matrix) — **done**
 - Serving an `active` artefact by slug enforces the access matrix: `public` → anyone;
   `authenticated` → any signed-in user; `private` → owner only. *(AH 8)*
 - Wrong-tier viewer, archived, and unknown slug → 404. *(AH 7, 8)*
+
+**Implementation notes (from building S6):**
+- **Domain** `access.ts`: pure `canViewArtefact(artefact, viewerId)` encoding the matrix,
+  gated by archived-is-inert (AH7). `viewerId = null` is the unauthenticated viewer. Reused
+  later by the gallery (S14) and data access (S11/S12).
+- **Serving route** `GET /a/:slug` (`routes/serve.ts`) — its own `attachSession` (it lives
+  outside `/api`), resolves the slug via `repo.findBySlug`, applies the matrix, and on allow
+  streams the trusted HTML **as-is** via `c.html` (`text/html; charset=UTF-8`, no
+  sanitization). Every deny — unknown slug, archived, wrong-tier — is a flat `404` so
+  visibility is never leaked. Mounted in `app.ts` **before** the static/SPA fallback.
+- **Adapters** lifted to `src/server/adapters.ts` (one Drizzle repo + filesystem payload
+  store) so the API routes and the serving route share a single composition root.
+- **Tests:** access-matrix unit test (the full grid incl. archived) + an end-to-end serving
+  test (public→anyone, authenticated→signed-in only, private→owner only, unknown slug→404,
+  archived→404 even for the owner).
 
 ### S7 — Archive / restore
 - Archive hides + un-serves the artefact and its data, sets `archivedAt`. *(AH 7)*

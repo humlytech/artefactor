@@ -2,19 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S5 done; building feature slices
+## Status: S6 done; building feature slices
 
-**S0 (scaffold), S1 (Identity), S2 (Create), S10 (Dashboard), and S5 (Share/unshare) are
-complete** — the monolith builds, runs, migrates, and tests green. Auth is wired
-(`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session
+**S0 (scaffold), S1 (Identity), S2 (Create), S10 (Dashboard), S5 (Share/unshare), and S6
+(Serve by slug) are complete** — the monolith builds, runs, migrates, and tests green. Auth
+is wired (`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session
 middleware + `requireAuth` guard, and a protected `GET /api/me`. Artefact Hosting so far:
 a Drizzle `ArtefactRepository` (`save`/`findById`/`findBySlug`/`listByOwner`), application
-commands for create and set-visibility, and BFF routes `POST /api/artefacts` (multipart
-upload → `active`/`private`), `GET /api/artefacts` (owner dashboard, archived hidden), and
-`PUT /api/artefacts/:id/visibility` (share/unshare, mint-once/retain slug). See
-`docs/specs/fdd/slice-dag.md` §S1–S2, S5, S10 implementation notes. Next up is **S6 (serve by
-slug)** and **S14 (gallery)** — both now unblocked by S5 — plus **S3/S4/S7/S11**. Development
-is **spec-driven**: locate the governing DDD invariant and FDD slice before coding, build
+commands for create and set-visibility, the pure access matrix (`domain/artefact/access.ts`),
+shared port adapters (`src/server/adapters.ts`), and routes `POST /api/artefacts` (multipart
+upload → `active`/`private`), `GET /api/artefacts` (owner dashboard), `PUT
+/api/artefacts/:id/visibility` (share/unshare), and `GET /a/:slug` (public render route,
+access matrix, raw trusted HTML). See `docs/specs/fdd/slice-dag.md` §S1–S2, S5–S6, S10
+implementation notes. Next up is **S14 (gallery)** plus **S3/S4/S7/S11**. Development is
+**spec-driven**: locate the governing DDD invariant and FDD slice before coding, build
 test-first, and keep spec ↔ tests ↔ code in sync in the same change.
 
 ### Architecture at a glance
