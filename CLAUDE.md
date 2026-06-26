@@ -2,28 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: S11 + S13 done; building feature slices
+## Status: Artefact Data context complete (through S12); building feature slices
 
 **The whole Artefact Hosting context plus the Artefact Data store *and its localStorage
-runtime* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10, S11 (own data blob), S13
-(localStorage hijack), S14. The monolith builds, runs, migrates, and tests green. Auth is
+runtime + host data-context switcher* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10,
+S11 (own data blob), S12 (data-context switcher), S13 (localStorage hijack), S14. The monolith builds, runs, migrates, and tests green. Auth is
 wired (`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session
 middleware + `requireAuth` guard, protected `GET /api/me`. Artefact Hosting: Drizzle
 `ArtefactRepository` (`save`/`findById`/`findBySlug`/`listByOwner`/`listShared`), the pure
 access matrix (`domain/artefact/access.ts`), commands (create/edit/set-visibility/archive/
 restore) under `src/server/artefacts/`, and routes `POST|GET /api/artefacts`, `GET|PATCH
 /api/artefacts/:id` (+`/:id/raw`), `PUT /api/artefacts/:id/visibility`, `POST
-/api/artefacts/:id/archive|restore`, `GET /api/gallery`, `GET /a/:slug`. Artefact Data
+/api/artefacts/:id/archive|restore`, `GET /api/gallery`, `GET /a/:slug` (+ `/a/:slug/frame`).
+Artefact Data
 (`src/domain/data/`, `src/server/data/`): the `DataEntry` aggregate (opaque ≤5 MB JSON blob,
 one per `(artefact, author)`), a Drizzle data repo, and `GET|PUT|DELETE
-/api/artefacts/:ref/data/me` (`:ref` = slug **or** id, access-matrix gated). The S13 runtime
+/api/artefacts/:ref/data/me` (`:ref` = slug **or** id, access-matrix gated), plus the S12
+switcher reads `GET /api/artefacts/:ref/data/authors` + `GET …/data/:authorId` (access-matrix
+gated, **not** auth-gated — anonymous may read a `public` artefact's data). The S13 runtime
 (`src/server/runtime/`) injects a seeded `localStorage` shim into both serving paths so
-artefacts persist with zero code changes (owner preview writes back via the id alias). Shared
-port adapters in `src/server/adapters.ts`. See `docs/specs/fdd/slice-dag.md` implementation
-notes. Next up is **S12** (host data-context switcher: `…/data/authors` + `…/data/:authorId`,
-loading another author's blob read-only) and **S8 → S9** (API keys + push). Development is
-**spec-driven**: locate the governing DDD invariant and FDD slice before coding, build
-test-first, and keep spec ↔ tests ↔ code in sync in the same change.
+artefacts persist with zero code changes (owner preview writes back via the id alias). S12
+serves `/a/:slug` as a host **shell** (toolbar + `<iframe>`) wrapping the artefact at
+`/a/:slug/frame` (`?author=<id>` re-seeds another author's blob read-only). Shared port
+adapters in `src/server/adapters.ts`. See `docs/specs/fdd/slice-dag.md` implementation notes.
+Next up is **S8 → S9** (API keys + push). Development is **spec-driven**: locate the governing
+DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in
+sync in the same change.
 
 ### Architecture at a glance
 

@@ -20,6 +20,7 @@ import {
 } from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { renderServedArtefact } from "../runtime/render";
+import { renderHostShell } from "../runtime/shell";
 import type { DataRepository } from "../../domain/data/data-repository";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
@@ -73,12 +74,38 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
     }
   });
 
-  // S4 — Owner views own artefact content. Serves the owner's trusted HTML
-  // as-is, by id, at any visibility — the in-app preview path (the `/a/:slug`
-  // route in S6 only works once an artefact is shared). The S13 localStorage
-  // bootstrap is injected and seeded with the owner's data context, addressed by
-  // id (so a never-shared private artefact still persists). Archived → 404.
+  // S4 + S12 — Owner views own artefact content. The in-app preview path (the
+  // `/a/:slug` route only works once an artefact is shared). Like the slug route,
+  // `/:id/raw` returns the S12 host **shell** (toolbar + iframe) and the artefact
+  // itself lives in `/:id/raw/frame`. Addressed by id so a never-shared private
+  // artefact still previews + persists. Non-owner / unknown / archived → 404.
   r.get("/:id/raw", requireAuth, async (c) => {
+    try {
+      const artefact = await loadOwnActiveArtefact(deps.repo, {
+        id: c.req.param("id"),
+        ownerId: ownerId(c),
+      });
+      return c.html(
+        renderHostShell({
+          title: artefact.title,
+          framePath: `/api/artefacts/${encodeURIComponent(artefact.id)}/raw/frame`,
+          authorsEndpoint: `/api/artefacts/${encodeURIComponent(artefact.id)}/data/authors`,
+          viewerId: ownerId(c),
+          ownerId: artefact.ownerId,
+        }),
+      );
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.notFound();
+      throw err;
+    }
+  });
+
+  // The artefact itself for the owner preview, inside the iframe. `?author=<id>`
+  // selects the data context (default = the owner's own, read-write; another
+  // author = read-only, AD5). The S13 localStorage bootstrap is injected and
+  // seeded with that context, addressed by id (so a never-shared artefact still
+  // persists). Archived → 404.
+  r.get("/:id/raw/frame", requireAuth, async (c) => {
     try {
       const artefact = await loadOwnActiveArtefact(deps.repo, {
         id: c.req.param("id"),
@@ -89,6 +116,7 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
         artefact.id,
         ownerId(c),
         deps,
+        { authorId: c.req.query("author") ?? null },
       );
       return c.html(html);
     } catch (err) {

@@ -14,9 +14,14 @@ import type { DataRepository } from "../../domain/data/data-repository";
 // artefact that has no slug). Access follows the Artefact access matrix: an
 // archived artefact, or one the caller cannot view, surfaces as not-found
 // (AD4, AD6, AH7/8).
-export interface OwnDataDeps {
+// The repos a data request needs to resolve + access-check an artefact. Shared
+// by the own-data (S11) and author-data (S12) commands.
+export interface DataAccessDeps {
   artefactRepo: ArtefactRepository;
   dataRepo: DataRepository;
+}
+
+export interface OwnDataDeps extends DataAccessDeps {
   newId?: () => string;
   now?: () => Date;
 }
@@ -25,8 +30,8 @@ export interface OwnDataDeps {
 // then apply the access matrix against the viewer. Missing / archived /
 // not-viewable all → not-found. (Slugs are base64url tokens and ids are uuids,
 // so the slug→id fallback cannot mis-resolve across the two.)
-async function resolveViewableArtefact(
-  deps: OwnDataDeps,
+export async function resolveViewableArtefact(
+  deps: DataAccessDeps,
   ref: string,
   viewerId: string | null,
 ) {

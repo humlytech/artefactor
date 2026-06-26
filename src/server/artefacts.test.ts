@@ -261,13 +261,24 @@ describe("create artefact (S2)", () => {
     });
 
     it("serves the owner's artefact content as HTML at any visibility", async () => {
-      const res = await app.request(`/api/artefacts/${id}/raw`, {
+      // S12 — `/raw` is now the host shell (toolbar + iframe); the artefact
+      // content + runtime live in `/raw/frame`.
+      const shell = await app.request(`/api/artefacts/${id}/raw`, {
         headers: { cookie },
       });
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("text/html");
-      // The served HTML carries the artefact content plus the injected runtime.
-      expect(await res.text()).toContain("<h1>mine</h1>");
+      expect(shell.status).toBe(200);
+      expect(shell.headers.get("content-type")).toContain("text/html");
+      const shellBody = await shell.text();
+      expect(shellBody).toContain("<iframe");
+      expect(shellBody).toContain(`/api/artefacts/${id}/raw/frame`);
+      expect(shellBody).not.toContain("<h1>mine</h1>");
+
+      const frame = await app.request(`/api/artefacts/${id}/raw/frame`, {
+        headers: { cookie },
+      });
+      expect(frame.status).toBe(200);
+      // The frame carries the artefact content plus the injected runtime.
+      expect(await frame.text()).toContain("<h1>mine</h1>");
     });
 
     it("hides the artefact from a non-owner with 404 (AH8)", async () => {

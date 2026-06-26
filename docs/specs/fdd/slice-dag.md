@@ -255,12 +255,38 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - The author-listing + per-author endpoints (S12) and the localStorage runtime shim (S13)
   build on this; no client UI yet (S11 is the API surface they consume).
 
-### S12 — Host UI: data-context switcher
+### S12 — Host UI: data-context switcher — **done**
 - A signed-in viewer with read access can list authors who have data and load another
   author's blob into the artefact, **read-only** (re-seed/iframe reload). *(AD 4, 5)*
 - Tiers enforced via the `…/data/authors` + `…/data/:authorId` endpoints: private → owner
   only; authenticated → signed-in; public → anyone. *(AD 4)*
-- This lives entirely in the host (BFF + Svelte chrome); the artefact stays opaque.
+- This lives entirely in the host (BFF + chrome); the artefact stays opaque.
+
+**Implementation notes (from building S12):**
+- **`/a/:slug` now returns a host *shell*** (`src/server/runtime/shell.ts`) — a thin toolbar
+  with the data-context `<select>` wrapping an `<iframe>`. The artefact itself moved to
+  **`/a/:slug/frame`** (`?author=<id>` selects the context). Both routes resolve the slug and
+  apply the same access matrix (deny → 404). Splitting them keeps the switcher chrome
+  *outside* the artefact container, exactly as AD §"Data context" requires.
+- **Server-rendered, not the SPA.** `/a/:slug` is the shareable link and serves
+  unauthenticated/public viewers who never load the Svelte SPA, so the shell + picker are
+  server-rendered (inline JS that fetches `…/data/authors` and re-points the iframe). The
+  DDD doc's "Svelte chrome" was aspirational; the served path is Hono, not the SPA.
+- **Read-only foreign context** (AD5): `renderServedArtefact` gained an `authorId` option;
+  the seeded context is writable **only** when the viewer is signed in *and* `authorId`
+  equals the viewer (otherwise `writable:false`, so the S13 shim throws on write).
+- **Two new endpoints** under the existing `/api/artefacts/:ref/data` mount —
+  `GET /authors` and `GET /:authorId` — gated by the access matrix (AD4), **not** `requireAuth`
+  (a public artefact's data is readable by the anonymous). Static `/authors`+`/me` are defined
+  before the `/:authorId` param so they win. Commands in `src/server/data/author-data.command.ts`
+  reuse `resolveViewableArtefact`; the repo gained `listAuthorsByArtefact` (no schema change).
+- **Author labels** are enriched BFF-side: a `UserDirectory` port
+  (`src/server/data/user-directory.ts` + Drizzle adapter) resolves author ids → name/email
+  from the BetterAuth `user` table. The Artefact Data store still holds only opaque ids; the
+  BFF composes them with Identity for presentation.
+- **Tests:** `author-data.command.test.ts` (access-matrix unit cover), `data-authors.test.ts`
+  (e2e endpoints incl. anonymous-public, archived→404, `/me` not shadowed), and `serve.test.ts`
+  extended for the shell/frame split + the read-only `?author` seed.
 
 ### S13 — Artefact runtime bootstrap (localStorage hijack) — **done** *(shipped with S11)*
 - Served artefacts get an injected shim that **replaces `window.localStorage`** with a

@@ -2,7 +2,10 @@ import { and, eq } from "drizzle-orm";
 import type { db as Db } from "./client";
 import { dataEntry } from "./schema";
 import type { DataEntry } from "../../domain/data/data-entry";
-import type { DataRepository } from "../../domain/data/data-repository";
+import type {
+  DataAuthorRef,
+  DataRepository,
+} from "../../domain/data/data-repository";
 
 type Database = typeof Db;
 type DataEntryRow = typeof dataEntry.$inferSelect;
@@ -52,6 +55,14 @@ export class DrizzleDataRepository implements DataRepository {
           eq(dataEntry.authorId, authorId),
         ),
       );
+  }
+
+  async listAuthorsByArtefact(artefactId: string): Promise<DataAuthorRef[]> {
+    const rows = await this.db
+      .select({ authorId: dataEntry.authorId, updatedAt: dataEntry.updatedAt })
+      .from(dataEntry)
+      .where(eq(dataEntry.artefactId, artefactId));
+    return rows.map((r) => ({ authorId: r.authorId, updatedAt: r.updatedAt }));
   }
 }
 

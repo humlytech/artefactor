@@ -50,6 +50,15 @@ describe("serve artefact by slug (S6)", () => {
     });
   }
 
+  // The artefact itself lives inside the iframe at `/a/:slug/frame`; `author`
+  // selects the data context (S12).
+  function frame(slug: string, opts: { cookie?: string; author?: string } = {}) {
+    const q = opts.author ? `?author=${encodeURIComponent(opts.author)}` : "";
+    return app.request(`/a/${slug}/frame${q}`, {
+      headers: opts.cookie ? { cookie: opts.cookie } : {},
+    });
+  }
+
   beforeAll(async () => {
     const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
     const { db } = await import("../infra/db/client");
@@ -60,12 +69,23 @@ describe("serve artefact by slug (S6)", () => {
     otherCookie = await signUp("other-s6@example.com");
   });
 
-  it("serves a public artefact to anyone, including the anonymous", async () => {
+  it("serves the host shell (with the data-context switcher) to anyone for a public artefact", async () => {
     const a = await makeArtefact("public");
     const res = await get(a.publicSlug!);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
+    // The shell is host chrome around an iframe pointing at the frame route; the
+    // artefact payload itself is NOT in the shell (it lives in the iframe).
+    expect(body).toContain("<iframe");
+    expect(body).toContain(`/a/${a.publicSlug}/frame`);
+    expect(body).toContain(`/api/artefacts/${a.publicSlug}/data/authors`);
+    expect(body).not.toContain(HTML);
+  });
+
+  it("serves the artefact payload + bootstrap in the frame (read-only for the anonymous)", async () => {
+    const a = await makeArtefact("public");
+    const body = await (await frame(a.publicSlug!)).text();
     // Trusted payload, plus the S13 localStorage bootstrap (read-only for the
     // anonymous viewer — seeded empty, no write-through).
     expect(body).toContain(HTML);
@@ -73,19 +93,42 @@ describe("serve artefact by slug (S6)", () => {
     expect(body).toContain('"writable":false');
   });
 
-  it("seeds the signed-in owner's own data context (read-write) into the page", async () => {
+  it("seeds the signed-in owner's own data context (read-write) into the frame", async () => {
     const a = await makeArtefact("public");
-    // Owner persists some data, then re-fetches the served page.
+    // Owner persists some data, then re-fetches the served frame.
     await app.request(`/api/artefacts/${a.publicSlug}/data/me`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", cookie: ownerCookie },
       body: '{"theme":"dark"}',
     });
-    const body = await (await get(a.publicSlug!, ownerCookie)).text();
+    const body = await (await frame(a.publicSlug!, { cookie: ownerCookie })).text();
     expect(body).toContain('"writable":true');
     // The seed blob is inlined so first reads are synchronous.
-    expect(body).toContain('theme');
-    expect(body).toContain('dark');
+    expect(body).toContain("theme");
+    expect(body).toContain("dark");
+  });
+
+  it("seeds another author's data read-only via ?author (S12, AD5)", async () => {
+    // Authenticated artefact: owner writes data; a different signed-in viewer
+    // loads the owner's context through the switcher.
+    const a = await makeArtefact("authenticated");
+    const ownerId = (
+      (await (await app.request("/api/me", { headers: { cookie: ownerCookie } })).json()) as {
+        id: string;
+      }
+    ).id;
+    await app.request(`/api/artefacts/${a.publicSlug}/data/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", cookie: ownerCookie },
+      body: '{"theme":"owner-dark"}',
+    });
+
+    const body = await (
+      await frame(a.publicSlug!, { cookie: otherCookie, author: ownerId })
+    ).text();
+    // Owner's blob is seeded, but the viewing context is read-only (AD5).
+    expect(body).toContain("owner-dark");
+    expect(body).toContain('"writable":false');
   });
 
   it("serves an authenticated artefact to signed-in users but not the anonymous", async () => {
