@@ -9,12 +9,21 @@ import {
   putOwnDataEntry,
   type OwnDataDeps,
 } from "../data/own-data.command";
+import {
+  getAuthorDataEntry,
+  listDataAuthors,
+} from "../data/author-data.command";
+import type { UserDirectory } from "../data/user-directory";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
-import type { DataEntryResponse } from "../../shared/contracts";
+import type {
+  DataAuthorsResponse,
+  DataEntryResponse,
+} from "../../shared/contracts";
 
 export interface DataRoutesDeps {
   artefactRepo: ArtefactRepository;
   dataRepo: DataRepository;
+  userDirectory: UserDirectory;
 }
 
 // S11 — Artefact Data: the caller's own blob. Mounted at
@@ -35,6 +44,40 @@ export function createDataRoutes(deps: DataRoutesDeps) {
   // always present at runtime though Hono types it as optional.
   const refOf = (c: { req: { param: (k: "ref") => string | undefined } }) =>
     c.req.param("ref") ?? "";
+
+  // S12 — Host data-context switcher. These two reads follow the artefact access
+  // matrix, NOT the caller's identity (AD4): a public artefact's authors are
+  // readable by anyone, including the anonymous — so they are gated by
+  // `canViewArtefact` inside the command, not by `requireAuth`. They exist only
+  // to power the host picker; the served artefact never calls them.
+
+  // Authors who have an entry, enriched with name/email for the picker label.
+  r.get("/authors", async (c) => {
+    try {
+      const refs = await listDataAuthors(
+        refOf(c),
+        c.get("user")?.id ?? null,
+        commandDeps,
+      );
+      const identities = await deps.userDirectory.lookup(
+        refs.map((a) => a.authorId),
+      );
+      return c.json<DataAuthorsResponse>({
+        authors: refs.map((a) => {
+          const who = identities.get(a.authorId);
+          return {
+            authorId: a.authorId,
+            name: who?.name ?? "",
+            email: who?.email ?? "",
+            updatedAt: a.updatedAt.toISOString(),
+          };
+        }),
+      });
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.notFound();
+      throw err;
+    }
+  });
 
   // The caller's own entry (AD-table `/data/me`). 200 with `blob: null` when none.
   r.get("/me", requireAuth, async (c) => {
@@ -82,6 +125,27 @@ export function createDataRoutes(deps: DataRoutesDeps) {
         commandDeps,
       );
       return c.body(null, 204);
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.notFound();
+      throw err;
+    }
+  });
+
+  // S12 — Load one author's blob for the host switcher to re-seed the artefact
+  // read-only. Defined last so the static `/me` and `/authors` routes win. Like
+  // `/authors`, gated by the access matrix (AD4), not `requireAuth`.
+  r.get("/:authorId", async (c) => {
+    try {
+      const entry = await getAuthorDataEntry(
+        refOf(c),
+        c.get("user")?.id ?? null,
+        c.req.param("authorId")!,
+        commandDeps,
+      );
+      return c.json<DataEntryResponse>({
+        blob: entry?.blob ?? null,
+        updatedAt: entry?.updatedAt.toISOString() ?? null,
+      });
     } catch (err) {
       if (err instanceof ArtefactNotFound) return c.notFound();
       throw err;

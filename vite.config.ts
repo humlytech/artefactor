@@ -20,10 +20,13 @@ export default defineConfig({
     // drifting to 5174+, which would break BetterAuth's trusted-origin check.
     port: 5273,
     strictPort: true,
-    // Proxy API + health to the Hono server during development.
+    // Proxy API + health + served artefacts to the Hono server during
+    // development. `/a/` (trailing slash) targets the slug-serving route
+    // (`/a/:slug` host shell + `/a/:slug/frame`) without swallowing `/assets`.
     proxy: {
       "/api": "http://localhost:3000",
       "/health": "http://localhost:3000",
+      "/a/": "http://localhost:3000",
     },
   },
 });

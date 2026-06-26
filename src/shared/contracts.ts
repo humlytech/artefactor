@@ -53,3 +53,18 @@ export interface DataEntryResponse {
   blob: string | null;
   updatedAt: string | null;
 }
+
+// S12 — Host data-context switcher. One author who holds a data entry for an
+// artefact, enriched (BFF-side) with their display identity so the host picker
+// can label contexts. Drives `GET /api/artefacts/:ref/data/authors`. The
+// artefact itself never sees this — it stays single-dataset and opaque (AD).
+export interface DataAuthorSummary {
+  authorId: string;
+  name: string;
+  email: string;
+  updatedAt: string;
+}
+
+export interface DataAuthorsResponse {
+  authors: DataAuthorSummary[];
+}

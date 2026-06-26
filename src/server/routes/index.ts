@@ -2,7 +2,12 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "../auth";
 import { env } from "../env";
-import { artefactRepository, dataRepository, payloadStore } from "../adapters";
+import {
+  artefactRepository,
+  dataRepository,
+  payloadStore,
+  userDirectory,
+} from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
@@ -73,7 +78,11 @@ export function createApiRoutes() {
   // or id. Mounted with the `:ref` param so the data handlers resolve the artefact.
   api.route(
     "/artefacts/:ref/data",
-    createDataRoutes({ artefactRepo: artefactRepository, dataRepo: dataRepository }),
+    createDataRoutes({
+      artefactRepo: artefactRepository,
+      dataRepo: dataRepository,
+      userDirectory,
+    }),
   );
 
   return api;
