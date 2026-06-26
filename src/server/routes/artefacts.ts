@@ -10,6 +10,14 @@ import {
   type CreateArtefactDeps,
 } from "../artefacts/create-artefact.command";
 import { setArtefactVisibilityCommand } from "../artefacts/set-visibility.command";
+import {
+  editArtefactCommand,
+  type EditArtefactInput,
+} from "../artefacts/edit-artefact.command";
+import {
+  archiveArtefactCommand,
+  restoreArtefactCommand,
+} from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
 import { ownerId, requireAuth, type AuthEnv } from "../middleware/auth";
 import type {
@@ -27,7 +35,15 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
   // archived ones are hidden by default (AH7). Grouping/filtering by kind is a
   // client concern — the BFF returns the flat, most-recent-first list.
   r.get("/", requireAuth, async (c) => {
-    const artefacts = await deps.repo.listByOwner(ownerId(c));
+    // `?archived=true` returns the owner's archived artefacts (the dashboard's
+    // archived view, used to restore them in S7); otherwise active only.
+    const archived = c.req.query("archived") === "true";
+    const owned = await deps.repo.listByOwner(ownerId(c), {
+      includeArchived: archived,
+    });
+    const artefacts = archived
+      ? owned.filter((a) => a.status === "archived")
+      : owned;
     return c.json<ArtefactListResponse>({
       artefacts: artefacts.map(toArtefactSummary),
     });
@@ -81,6 +97,63 @@ export function createArtefactRoutes(deps: CreateArtefactDeps) {
     try {
       const updated = await setArtefactVisibilityCommand(
         { artefactId: c.req.param("id"), requesterId: ownerId(c), visibility },
+        { repo: deps.repo },
+      );
+      return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // S3 — Edit artefact. Owner updates any of title / kind / payload
+  // (multipart/form-data; only the provided fields change). Archived/non-owner
+  // → 404; empty title, empty/oversize payload, unknown kind → 400 (AH2, 3, 7, 8).
+  r.patch("/:id", requireAuth, async (c) => {
+    const body = await c.req.parseBody();
+    const input: EditArtefactInput = {
+      artefactId: c.req.param("id"),
+      requesterId: ownerId(c),
+    };
+    if (typeof body.title === "string") input.title = body.title;
+    if (typeof body.kind === "string") input.kind = body.kind;
+    if (body.payload instanceof File) {
+      if (body.payload.size > MAX_PAYLOAD_BYTES) {
+        return c.json({ error: "payload exceeds the 100 MB cap" }, 400);
+      }
+      input.payload = new Uint8Array(await body.payload.arrayBuffer());
+    }
+    try {
+      const updated = await editArtefactCommand(input, deps);
+      return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // S7 — Archive (soft-delete). Owner-only; active → archived (AH7).
+  r.post("/:id/archive", requireAuth, async (c) => {
+    try {
+      const updated = await archiveArtefactCommand(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        { repo: deps.repo },
+      );
+      return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // S7 — Restore. Owner-only; archived → active at the prior visibility (AH9).
+  r.post("/:id/restore", requireAuth, async (c) => {
+    try {
+      const updated = await restoreArtefactCommand(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));

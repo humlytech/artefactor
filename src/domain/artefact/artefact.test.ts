@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  archiveArtefact,
   createArtefact,
+  editArtefact,
+  restoreArtefact,
   shareArtefact,
   unshareArtefact,
   MAX_PAYLOAD_BYTES,
@@ -103,6 +106,79 @@ describe("shareArtefact / unshareArtefact (S5)", () => {
     expect(shareArtefact(a, { tier: "public", newSlug: "s", now: later }).updatedAt).toEqual(
       later,
     );
+  });
+});
+
+describe("editArtefact (S3)", () => {
+  it("updates only the provided fields and bumps updatedAt", () => {
+    const a = createArtefact({ ...base, now: new Date("2026-01-01T00:00:00Z") });
+    const later = new Date("2026-03-01T00:00:00Z");
+    const edited = editArtefact(a, { title: "  New title  ", now: later });
+    expect(edited.title).toBe("New title");
+    expect(edited.kind).toBe(a.kind); // untouched
+    expect(edited.updatedAt).toEqual(later);
+  });
+
+  it("replaces the payload when given a new one (AH2)", () => {
+    const a = createArtefact(base);
+    const edited = editArtefact(a, {
+      payload: { ref: "r2", bytes: 2048, hash: "newhash" },
+    });
+    expect(edited.payloadRef).toBe("r2");
+    expect(edited.payloadBytes).toBe(2048);
+    expect(edited.payloadHash).toBe("newhash");
+  });
+
+  it("rejects an empty title and oversize payload (AH2, AH3)", () => {
+    const a = createArtefact(base);
+    expect(() => editArtefact(a, { title: "   " })).toThrow(InvariantViolation);
+    expect(() =>
+      editArtefact(a, { payload: { ref: "r", bytes: MAX_PAYLOAD_BYTES + 1, hash: "h" } }),
+    ).toThrow(InvariantViolation);
+    expect(() =>
+      editArtefact(a, { payload: { ref: "r", bytes: 0, hash: "h" } }),
+    ).toThrow(InvariantViolation);
+  });
+
+  it("is blocked while archived (AH7)", () => {
+    const archived = { ...createArtefact(base), status: "archived" as const };
+    expect(() => editArtefact(archived, { title: "x" })).toThrow(InvariantViolation);
+  });
+});
+
+describe("archiveArtefact / restoreArtefact (S7)", () => {
+  it("archive marks inert and stamps archivedAt, keeping visibility", () => {
+    const shared = shareArtefact(createArtefact(base), {
+      tier: "public",
+      newSlug: "s",
+    });
+    const now = new Date("2026-04-01T00:00:00Z");
+    const archived = archiveArtefact(shared, { now });
+    expect(archived.status).toBe("archived");
+    expect(archived.archivedAt).toEqual(now);
+    expect(archived.visibility).toBe("public"); // retained for restore
+    expect(archived.publicSlug).toBe("s");
+  });
+
+  it("rejects archiving an already-archived artefact", () => {
+    const archived = { ...createArtefact(base), status: "archived" as const };
+    expect(() => archiveArtefact(archived)).toThrow(InvariantViolation);
+  });
+
+  it("restore returns to active at the prior visibility and clears archivedAt (AH9)", () => {
+    const shared = shareArtefact(createArtefact(base), {
+      tier: "authenticated",
+      newSlug: "s",
+    });
+    const archived = archiveArtefact(shared);
+    const restored = restoreArtefact(archived);
+    expect(restored.status).toBe("active");
+    expect(restored.archivedAt).toBeNull();
+    expect(restored.visibility).toBe("authenticated"); // prior tier
+  });
+
+  it("rejects restoring an artefact that is not archived", () => {
+    expect(() => restoreArtefact(createArtefact(base))).toThrow(InvariantViolation);
   });
 });
 

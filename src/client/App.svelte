@@ -139,6 +139,79 @@
     }
   }
 
+  // S3 — edit an artefact (title / kind / optional replacement payload).
+  let editingId = $state<string | null>(null);
+  let editTitle = $state("");
+  let editKind = $state<string>(ARTEFACT_KINDS[0]);
+  let editFiles = $state<FileList | null>(null);
+
+  function startEdit(a: ArtefactSummary) {
+    editingId = a.id;
+    editTitle = a.title;
+    editKind = a.kind;
+    editFiles = null;
+  }
+
+  async function saveEdit(a: ArtefactSummary) {
+    listError = null;
+    const form = new FormData();
+    form.set("title", editTitle);
+    form.set("kind", editKind);
+    const file = editFiles?.[0];
+    if (file) form.set("payload", file);
+    const res = await fetch(`/api/artefacts/${a.id}`, {
+      method: "PATCH",
+      body: form,
+    });
+    if (res.ok) {
+      editingId = null;
+      loadArtefacts();
+      loadGallery();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      listError = body.error ?? `Could not save (${res.status})`;
+    }
+  }
+
+  // S7 — archive / restore.
+  let archived = $state<ArtefactSummary[]>([]);
+
+  async function loadArchived() {
+    const res = await fetch("/api/artefacts?archived=true");
+    if (res.ok) {
+      archived = ((await res.json()) as { artefacts: ArtefactSummary[] })
+        .artefacts;
+    }
+  }
+
+  $effect(() => {
+    if ($session.data) loadArchived();
+  });
+
+  async function archive(a: ArtefactSummary) {
+    listError = null;
+    const res = await fetch(`/api/artefacts/${a.id}/archive`, { method: "POST" });
+    if (res.ok) {
+      loadArtefacts();
+      loadGallery();
+      loadArchived();
+    } else {
+      listError = `Could not archive (${res.status})`;
+    }
+  }
+
+  async function restore(a: ArtefactSummary) {
+    listError = null;
+    const res = await fetch(`/api/artefacts/${a.id}/restore`, { method: "POST" });
+    if (res.ok) {
+      loadArtefacts();
+      loadGallery();
+      loadArchived();
+    } else {
+      listError = `Could not restore (${res.status})`;
+    }
+  }
+
   // S14 — browse gallery: artefacts shared to the signed-in user.
   let gallery = $state<ArtefactSummary[]>([]);
   let galleryError = $state<string | null>(null);
@@ -216,33 +289,79 @@
             <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
             <ul class="divide-y rounded border">
               {#each items as a (a.id)}
-                <li class="flex items-center justify-between gap-3 px-3 py-2">
-                  <span class="truncate text-sm">{a.title}</span>
-                  <span class="flex shrink-0 items-center gap-2 text-xs">
-                    <a
-                      class="text-blue-600 underline"
-                      href={`/api/artefacts/${a.id}/raw`}
-                      target="_blank"
-                      rel="noopener"
-                    >
-                      open
-                    </a>
-                    <select
-                      class="rounded border px-1 py-0.5 text-xs"
-                      value={a.visibility}
-                      onchange={(e) =>
-                        changeVisibility(a, e.currentTarget.value)}
-                    >
-                      {#each Object.entries(VISIBILITY_LABEL) as [value, label] (value)}
-                        <option {value}>{label}</option>
-                      {/each}
-                    </select>
-                    {#if shareUrl(a)}
-                      <a class="text-blue-600 underline" href={shareUrl(a)}>
-                        link
+                <li class="space-y-2 px-3 py-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate text-sm">{a.title}</span>
+                    <span class="flex shrink-0 items-center gap-2 text-xs">
+                      <a
+                        class="text-blue-600 underline"
+                        href={`/api/artefacts/${a.id}/raw`}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        open
                       </a>
-                    {/if}
-                  </span>
+                      <select
+                        class="rounded border px-1 py-0.5 text-xs"
+                        value={a.visibility}
+                        onchange={(e) =>
+                          changeVisibility(a, e.currentTarget.value)}
+                      >
+                        {#each Object.entries(VISIBILITY_LABEL) as [value, label] (value)}
+                          <option {value}>{label}</option>
+                        {/each}
+                      </select>
+                      {#if shareUrl(a)}
+                        <a class="text-blue-600 underline" href={shareUrl(a)}>
+                          link
+                        </a>
+                      {/if}
+                      <button
+                        type="button"
+                        class="text-zinc-600 underline"
+                        onclick={() => startEdit(a)}>edit</button
+                      >
+                      <button
+                        type="button"
+                        class="text-red-600 underline"
+                        onclick={() => archive(a)}>archive</button
+                      >
+                    </span>
+                  </div>
+
+                  {#if editingId === a.id}
+                    <div class="space-y-2 rounded bg-zinc-50 p-2">
+                      <input
+                        class="w-full rounded border px-2 py-1 text-sm"
+                        bind:value={editTitle}
+                      />
+                      <select
+                        class="w-full rounded border px-2 py-1 text-sm"
+                        bind:value={editKind}
+                      >
+                        {#each ARTEFACT_KINDS as kind (kind)}
+                          <option value={kind}>{kind}</option>
+                        {/each}
+                      </select>
+                      <input
+                        class="w-full text-xs"
+                        type="file"
+                        accept=".html,.htm,text/html"
+                        bind:files={editFiles}
+                      />
+                      <p class="text-xs text-zinc-500">
+                        Leave the file empty to keep the current payload.
+                      </p>
+                      <div class="flex gap-2">
+                        <Button size="sm" onclick={() => saveEdit(a)}>Save</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onclick={() => (editingId = null)}>Cancel</Button
+                        >
+                      </div>
+                    </div>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -250,6 +369,24 @@
         {/each}
       {/if}
     </section>
+
+    {#if archived.length > 0}
+      <section class="space-y-3 border-t pt-6">
+        <h2 class="text-lg font-medium">Archived</h2>
+        <ul class="divide-y rounded border">
+          {#each archived as a (a.id)}
+            <li class="flex items-center justify-between gap-3 px-3 py-2">
+              <span class="truncate text-sm text-zinc-500">{a.title}</span>
+              <button
+                type="button"
+                class="shrink-0 text-xs text-blue-600 underline"
+                onclick={() => restore(a)}>restore</button
+              >
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
 
     <section class="space-y-3 border-t pt-6">
       <h2 class="text-lg font-medium">New artefact</h2>

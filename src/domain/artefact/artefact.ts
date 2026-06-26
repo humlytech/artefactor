@@ -110,3 +110,71 @@ export function unshareArtefact(a: Artefact, options?: { now?: Date }): Artefact
     updatedAt: options?.now ?? new Date(),
   };
 }
+
+export interface EditArtefactChanges {
+  title?: string;
+  kind?: ArtefactKind;
+  // A newly-stored payload replacing the current one. The caller is responsible
+  // for deleting the previous payload after a successful edit.
+  payload?: StoredPayload;
+  now?: Date;
+}
+
+// Edit (S3): update any of title / kind / payload, bumping `updatedAt`. Only the
+// provided fields change. Re-applies the same payload/title invariants as create
+// (AH2, AH3) and is blocked while archived (AH7). Owner authority (AH8/9) is
+// enforced by the caller.
+export function editArtefact(a: Artefact, changes: EditArtefactChanges): Artefact {
+  if (a.status === "archived") {
+    throw new InvariantViolation("cannot edit an archived artefact"); // AH7
+  }
+
+  const next: Artefact = { ...a, updatedAt: changes.now ?? new Date() };
+
+  if (changes.title !== undefined) {
+    const title = changes.title.trim();
+    if (title.length === 0) {
+      throw new InvariantViolation("title must not be empty"); // AH3
+    }
+    next.title = title;
+  }
+
+  if (changes.kind !== undefined) {
+    next.kind = changes.kind;
+  }
+
+  if (changes.payload !== undefined) {
+    if (changes.payload.bytes <= 0) {
+      throw new InvariantViolation("payload must not be empty"); // AH2
+    }
+    if (changes.payload.bytes > MAX_PAYLOAD_BYTES) {
+      throw new InvariantViolation("payload exceeds the 100 MB cap"); // AH2
+    }
+    next.payloadRef = changes.payload.ref;
+    next.payloadBytes = changes.payload.bytes;
+    next.payloadHash = changes.payload.hash;
+  }
+
+  return next;
+}
+
+// Archive (S7, AH7): soft-delete. The artefact becomes inert — not served, hidden
+// from default listings — and `archivedAt` is stamped. Visibility is left intact
+// so restore can return to the prior tier.
+export function archiveArtefact(a: Artefact, options?: { now?: Date }): Artefact {
+  if (a.status === "archived") {
+    throw new InvariantViolation("artefact is already archived");
+  }
+  const now = options?.now ?? new Date();
+  return { ...a, status: "archived", archivedAt: now, updatedAt: now };
+}
+
+// Restore (S7, AH9): return an archived artefact to `active` at its prior
+// visibility (retained through archival), clearing `archivedAt`.
+export function restoreArtefact(a: Artefact, options?: { now?: Date }): Artefact {
+  if (a.status !== "archived") {
+    throw new InvariantViolation("only an archived artefact can be restored");
+  }
+  const now = options?.now ?? new Date();
+  return { ...a, status: "active", archivedAt: null, updatedAt: now };
+}

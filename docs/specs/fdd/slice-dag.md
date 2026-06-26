@@ -91,11 +91,23 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   invariants and no orphan payload), plus an end-to-end `artefacts.test.ts` (sign-up → upload
   → 201/401/400 + Drizzle round-trip through the `owner_id` FK).
 
-### S3 — Edit artefact
+### S3 — Edit artefact — **done** *(shipped with S7)*
 - Owner updates title / kind / payload; `updatedAt` bumps.
 - Same payload/title invariants as create. *(AH 2, 3)*
 - Rejected if artefact is archived. *(AH 7)*
 - Non-owner cannot edit. *(AH 8)*
+
+**Implementation notes (from building S3):**
+- **Domain** `editArtefact(a, { title?, kind?, payload? })` — only the provided fields
+  change, re-applies the create invariants (AH2/3), bumps `updatedAt`, blocked while
+  archived (AH7).
+- **Command** (`edit-artefact.command.ts`) loads the caller's own active artefact
+  (`loadOwnActiveArtefact`; archived/non-owner → not-found, AH7/8), validates the kind, and
+  on payload replacement stores the new bytes, then deletes the **previous** payload only
+  after a successful save (new one cleaned up on rejection — no orphans).
+- **BFF** `PATCH /api/artefacts/:id` (multipart, partial): `ArtefactNotFound → 404`,
+  `InvariantViolation → 400`, returns the updated summary.
+- **Client** (`App.svelte`): inline per-row edit (title / kind / optional replacement file).
 
 ### S4 — Owner views own artefact — **done**
 - Owner can view their own `active` artefact at any visibility.
@@ -162,9 +174,29 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   test (public→anyone, authenticated→signed-in only, private→owner only, unknown slug→404,
   archived→404 even for the owner).
 
-### S7 — Archive / restore
+### S7 — Archive / restore — **done** *(shipped with S3)*
 - Archive hides + un-serves the artefact and its data, sets `archivedAt`. *(AH 7)*
 - Restore returns it to `active` with prior visibility, clears `archivedAt`. Owner-only. *(AH 9)*
+
+**Implementation notes (from building S7):**
+- **Domain** `archiveArtefact` (active → archived, stamps `archivedAt`, **keeps visibility**
+  so restore can return to the prior tier) and `restoreArtefact` (archived → active, clears
+  `archivedAt`; rejects a non-archived artefact). Because archival only flips `status`, the
+  prior visibility is retained for free (AH9).
+- **Commands** (`lifecycle.command.ts`): archive loads the owner's **active** artefact
+  (non-owner / unknown / already-archived → not-found); restore loads regardless of status
+  via `loadOwnArtefact` and lets the domain reject a non-archived one (→ 400).
+- **BFF** `POST /api/artefacts/:id/archive` + `/restore`; `GET /api/artefacts?archived=true`
+  lists the owner's archived artefacts (the dashboard's restore view). Archived artefacts are
+  already un-served by the S4/S6 read paths and the gallery (all gate on `status === active`),
+  so archive makes them inert everywhere; their data entries become inert too once S11 lands
+  (the data paths will gate on artefact status).
+- **Client** (`App.svelte`): an `archive` button per active row and an "Archived" section
+  with `restore`.
+- **Tests:** domain unit (archive/restore transitions + guards), command unit (archive/
+  restore round-trip, non-owner → not-found, double-archive → not-found, restore-active →
+  rejected), and an end-to-end test (archive un-serves the slug + owner view + active list,
+  surfaces in `?archived=true`, restore re-serves at the prior tier).
 
 ### S8 — API key issue / revoke
 - Owner issues a key (plaintext shown once) and can revoke it. *(IA 2, 3)*

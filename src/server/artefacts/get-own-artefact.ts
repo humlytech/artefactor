@@ -21,3 +21,17 @@ export async function loadOwnActiveArtefact(
   }
   return artefact;
 }
+
+// Load an owned artefact regardless of status (S7 restore needs the archived
+// one). Missing or not-owned → not-found, so existence still does not leak; the
+// caller's transition (e.g. restoreArtefact) enforces the required status.
+export async function loadOwnArtefact(
+  repo: ArtefactRepository,
+  params: { id: string; ownerId: string },
+): Promise<Artefact> {
+  const artefact = await repo.findById(params.id);
+  if (!artefact || artefact.ownerId !== params.ownerId) {
+    throw new ArtefactNotFound(params.id);
+  }
+  return artefact;
+}
