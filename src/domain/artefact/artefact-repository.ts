@@ -18,4 +18,8 @@ export interface ArtefactRepository {
     ownerId: string,
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]>;
+  // Active artefacts shared to signed-in users — visibility `authenticated` or
+  // `public`, across all owners — most-recently-updated first. The browse
+  // gallery (S14); private artefacts never appear (AH8).
+  listShared(): Promise<Artefact[]>;
 }

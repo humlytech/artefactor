@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { db as Db } from "./client";
 import { artefact } from "./schema";
 import type { Artefact } from "../../domain/artefact/artefact";
@@ -56,6 +56,21 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .select()
       .from(artefact)
       .where(where)
+      .orderBy(desc(artefact.updatedAt));
+    return rows.map(toAggregate);
+  }
+
+  async listShared(): Promise<Artefact[]> {
+    // Uses the (status, visibility) index. Cross-owner; private never matches.
+    const rows = await this.db
+      .select()
+      .from(artefact)
+      .where(
+        and(
+          eq(artefact.status, "active"),
+          inArray(artefact.visibility, ["authenticated", "public"]),
+        ),
+      )
       .orderBy(desc(artefact.updatedAt));
     return rows.map(toAggregate);
   }

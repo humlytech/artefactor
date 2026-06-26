@@ -4,8 +4,11 @@ import { auth } from "../auth";
 import { env } from "../env";
 import { artefactRepository, payloadStore } from "../adapters";
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
-import { createArtefactRoutes } from "./artefacts";
-import type { MeResponse } from "../../shared/contracts";
+import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
+import type {
+  ArtefactListResponse,
+  MeResponse,
+} from "../../shared/contracts";
 
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
 export function createApiRoutes() {
@@ -41,6 +44,17 @@ export function createApiRoutes() {
       id: user.id,
       email: user.email,
       name: user.name,
+    });
+  });
+
+  // S14 — Browse gallery. Signed-in users only (unauthenticated access is by
+  // slug link only). Lists active artefacts shared to them (`authenticated` +
+  // `public`) across all owners; others' private artefacts never appear (AH8).
+  // The client groups/filters by kind.
+  api.get("/gallery", requireAuth, async (c) => {
+    const artefacts = await artefactRepository.listShared();
+    return c.json<ArtefactListResponse>({
+      artefacts: artefacts.map(toArtefactSummary),
     });
   });
 

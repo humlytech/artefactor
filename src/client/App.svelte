@@ -133,10 +133,38 @@
     });
     if (res.ok) {
       loadArtefacts();
+      loadGallery();
     } else {
       listError = `Could not update visibility (${res.status})`;
     }
   }
+
+  // S14 — browse gallery: artefacts shared to the signed-in user.
+  let gallery = $state<ArtefactSummary[]>([]);
+  let galleryError = $state<string | null>(null);
+
+  async function loadGallery() {
+    galleryError = null;
+    const res = await fetch("/api/gallery");
+    if (res.ok) {
+      gallery = ((await res.json()) as { artefacts: ArtefactSummary[] })
+        .artefacts;
+    } else if (res.status !== 401) {
+      galleryError = `${res.status} ${res.statusText}`;
+    }
+  }
+
+  $effect(() => {
+    if ($session.data) loadGallery();
+  });
+
+  const galleryGrouped = $derived.by(() => {
+    const groups = new Map<string, ArtefactSummary[]>();
+    for (const a of gallery) {
+      (groups.get(a.kind) ?? groups.set(a.kind, []).get(a.kind)!).push(a);
+    }
+    return [...groups.entries()];
+  });
 </script>
 
 <main class="mx-auto max-w-md space-y-6 p-8">
@@ -248,6 +276,36 @@
           Created <strong>{created.title}</strong> ({created.kind}) —
           {created.visibility}, {created.payloadBytes} bytes.
         </div>
+      {/if}
+    </section>
+
+    <section class="space-y-3 border-t pt-6">
+      <h2 class="text-lg font-medium">Shared with you</h2>
+      {#if galleryError}
+        <p class="text-sm text-red-600">Could not load gallery: {galleryError}</p>
+      {:else if galleryGrouped.length === 0}
+        <p class="text-sm text-zinc-500">Nothing shared with you yet.</p>
+      {:else}
+        {#each galleryGrouped as [kind, items] (kind)}
+          <div class="space-y-1">
+            <h3 class="text-sm font-semibold text-zinc-600">{kind}</h3>
+            <ul class="divide-y rounded border">
+              {#each items as a (a.id)}
+                <li class="flex items-center justify-between gap-3 px-3 py-2">
+                  <span class="truncate text-sm">{a.title}</span>
+                  <a
+                    class="shrink-0 text-xs text-blue-600 underline"
+                    href={`/a/${a.publicSlug}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    open
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
       {/if}
     </section>
   {:else}

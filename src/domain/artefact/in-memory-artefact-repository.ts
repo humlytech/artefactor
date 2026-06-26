@@ -39,4 +39,15 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((a) => ({ ...a }));
   }
+
+  async listShared(): Promise<Artefact[]> {
+    return [...this.store.values()]
+      .filter(
+        (a) =>
+          a.status === "active" &&
+          (a.visibility === "authenticated" || a.visibility === "public"),
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((a) => ({ ...a }));
+  }
 }

@@ -147,4 +147,20 @@ describe("InMemoryArtefactRepository", () => {
       expect(list.map((a) => a.id).sort()).toEqual(["a1", "arch"]);
     });
   });
+
+  describe("listShared (S14)", () => {
+    it("returns active authenticated+public across owners, never private/archived", async () => {
+      const repo = new InMemoryArtefactRepository();
+      const make = (id: string, over: Partial<ReturnType<typeof createArtefact>>) =>
+        repo.save({ ...createArtefact({ ...base, id }), ...over });
+
+      await make("pub", { ownerId: "u1", visibility: "public" });
+      await make("auth", { ownerId: "u2", visibility: "authenticated" });
+      await make("priv", { ownerId: "u2", visibility: "private" });
+      await make("arch", { ownerId: "u1", visibility: "public", status: "archived" });
+
+      const shared = await repo.listShared();
+      expect(shared.map((a) => a.id).sort()).toEqual(["auth", "pub"]);
+    });
+  });
 });

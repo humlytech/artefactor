@@ -199,9 +199,24 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
 - Over-cap write throws `QuotaExceededError`; a read-only context (logged-out public viewer,
   or another author's data loaded via S12) throws on write while seeded reads still work. *(AD 3, 5, 8)*
 
-### S14 — Browse gallery
+### S14 — Browse gallery — **done**
 - A signed-in user browses artefacts shared to them (`authenticated` + `public`), grouped by
   kind; private artefacts of others never appear. *(AH 8)*
+
+**Implementation notes (from building S14):**
+- New repository port method **`listShared()`** — active artefacts with visibility
+  `authenticated` or `public`, across all owners, most-recently-updated first. Drizzle impl
+  uses the `(status, visibility)` index (`inArray`); in-memory mirrors it. Private never
+  matches (AH8). The viewer's own shared artefacts are included (they are visible to them).
+- BFF **`GET /api/gallery`** is `requireAuth` — the gallery is signed-in users only
+  (unauthenticated access is by slug link only). Returns `ArtefactListResponse` via the
+  shared `toArtefactSummary`; client groups by kind.
+- **Client** (`App.svelte`): a "Shared with you" section grouped by kind, each item an
+  `open` link to `/a/:slug` (the S6 serving route); reloads when the owner changes a
+  visibility tier.
+- **Tests:** in-memory `listShared` unit (active authenticated+public across owners; excludes
+  private + archived) and an end-to-end gallery test (two owners → a signed-in viewer sees
+  every shared artefact across owners, never others' private; `401` unauthenticated).
 
 ## Build order
 
