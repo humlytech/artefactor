@@ -9,6 +9,9 @@ const schema = z.object({
   ARTEFACTOR_PAYLOAD_DIR: z.string().min(1).default("./data/payloads"),
   MIGRATIONS_DIR: z.string().min(1).default("./src/infra/db/migrations"),
   CLIENT_DIR: z.string().min(1).default("./dist/client"),
+  // Git commit the image was built from; stamped by the Docker build-arg in CI
+  // (see .github/workflows/deploy.yml) and surfaced at GET /health.
+  GIT_SHA: z.string().min(1).default("dev"),
   // BetterAuth (S1 — Identity). Secret signs sessions/tokens; in production it
   // MUST be supplied. A fixed dev/test default keeps local runs zero-config.
   BETTER_AUTH_SECRET: z.string().min(1).default("dev-insecure-secret-change-me"),

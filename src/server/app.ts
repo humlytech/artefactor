@@ -13,7 +13,11 @@ export function createApp() {
   app.use("*", logger());
 
   app.get("/health", (c) =>
-    c.json<HealthResponse>({ status: "ok", uptime: process.uptime() }),
+    c.json<HealthResponse>({
+      status: "ok",
+      uptime: process.uptime(),
+      build: env.GIT_SHA,
+    }),
   );
 
   app.route("/api", createApiRoutes());

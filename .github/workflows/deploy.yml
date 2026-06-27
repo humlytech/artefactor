@@ -1,0 +1,85 @@
+# Deploy main → production (Coolify on the UpCloud VPS).
+#
+# Pipeline: gate (test + typecheck) → build the Docker image → push to GHCR
+# → poke Coolify's deploy webhook, which pulls the new image and restarts the container.
+# The VPS never builds anything; a failed gate or build never reaches prod.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   COOLIFY_WEBHOOK   the application's deploy-webhook URL (Coolify → app → Webhooks)
+#   COOLIFY_TOKEN     a Coolify API token (Keys & Tokens → API tokens, deploy permission)
+# GHCR pushes authenticate with the built-in GITHUB_TOKEN — no extra secret.
+#
+# Actions are pinned to commit SHAs (immutable; a moved tag can't ship code here).
+#
+# Full runbook: docs/deployment.md
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # manual redeploy — main only, enforced by the ref guard below
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never kill a deploy mid-flight; queue instead
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }} # → ghcr.io/humlytech/artefactor on the fork
+
+jobs:
+  gate:
+    # workflow_dispatch lets an operator pick any ref in the UI; production deploys
+    # only ever from main. Skipping the gate skips the dependent jobs with it.
+    # The gate itself is the reusable ci.yml — the same one every PR runs — so what
+    # PRs check and what deploys gate on can never drift.
+    # Owner guard: production deploys only from the humlytech fork, so a push to the
+    # personal repo's main never deploys (nor pushes a stray image to its GHCR).
+    if: github.ref == 'refs/heads/main' && github.repository == 'humlytech/artefactor'
+    permissions:
+      contents: read # the called ci.yml inherits at most this
+    uses: ./.github/workflows/ci.yml
+
+  build-push:
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        # Bounded + retried: a transient Coolify hiccup retries, a hung request can't
+        # wedge the job. --retry-all-errors covers 5xx, not just connection failures.
+        run: |
+          curl --fail-with-body --max-time 60 \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+            "${COOLIFY_WEBHOOK}"

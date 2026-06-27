@@ -25,8 +25,13 @@ RUN pnpm prune --prod
 FROM node:26-bookworm-slim AS runtime
 WORKDIR /app
 
+# Stamp the build commit (passed by CI as --build-arg GIT_SHA=<sha>); surfaced at
+# GET /health so a deploy can be confirmed against the shipped commit.
+ARG GIT_SHA=dev
+
 ENV NODE_ENV=production \
     PORT=3000 \
+    GIT_SHA=${GIT_SHA} \
     DATABASE_PATH=/data/artefactor.db \
     ARTEFACTOR_PAYLOAD_DIR=/data/payloads \
     CLIENT_DIR=/app/dist/client \

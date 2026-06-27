@@ -6,6 +6,10 @@ import type { ArtefactKind } from "../domain/artefact/kind";
 export interface HealthResponse {
   status: "ok";
   uptime: number;
+  // The git commit the running image was built from (GIT_SHA build-arg). "dev"
+  // for local/un-stamped builds. Lets a deploy be confirmed against the shipped
+  // commit: `curl …/health` → `build` is the live image's SHA.
+  build: string;
 }
 
 // S1 — Identity. The current authenticated identity, as returned by the
