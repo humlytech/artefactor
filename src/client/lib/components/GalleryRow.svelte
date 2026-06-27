@@ -16,11 +16,15 @@
 <div
   style="display:flex;align-items:center;gap:14px;padding:11px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);"
 >
-  <div
-    style="width:42px;height:42px;border-radius:10px;background:{m.tint};display:flex;align-items:center;justify-content:center;flex-shrink:0;"
+  <!-- icon — clickable; opens the artefact -->
+  <button
+    type="button"
+    onclick={onOpen}
+    aria-label={`Open ${g.title}`}
+    style="width:42px;height:42px;border-radius:10px;background:{m.tint};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;padding:0;cursor:pointer;"
   >
     <Icon paths={m.icon} size={20} width={1.7} color={m.color} />
-  </div>
+  </button>
   <div style="flex:1;min-width:0;">
     <div
       style="font-size:14px;font-weight:600;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"

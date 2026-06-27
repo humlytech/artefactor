@@ -28,11 +28,15 @@
     ? 'z-index:50;'
     : ''}"
 >
-  <div
-    style="width:42px;height:42px;border-radius:10px;background:{m.tint};display:flex;align-items:center;justify-content:center;flex-shrink:0;"
+  <!-- icon — clickable; opens the artefact like the title does -->
+  <button
+    type="button"
+    onclick={onOpen}
+    aria-label={`Open ${a.title}`}
+    style="width:42px;height:42px;border-radius:10px;background:{m.tint};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;padding:0;cursor:pointer;"
   >
     <Icon paths={m.icon} size={20} width={1.7} color={m.color} />
-  </div>
+  </button>
   <div style="flex:1;min-width:0;">
     <button
       onclick={onOpen}

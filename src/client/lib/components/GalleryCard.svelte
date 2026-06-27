@@ -15,8 +15,12 @@
 
 <!-- Grid card: base look + hover "pop" come from `.af-card-grid` (app.css). -->
 <div class="af-card-grid">
-  <div
-    style="position:relative;height:108px;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;"
+  <!-- thumbnail — clickable upper half; opens the artefact -->
+  <button
+    type="button"
+    onclick={onOpen}
+    aria-label={`Open ${g.title}`}
+    style="position:relative;width:100%;height:108px;padding:0;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border:none;border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;cursor:pointer;font-family:inherit;"
   >
     <div
       style="position:absolute;inset:0;opacity:.5;background-image:repeating-linear-gradient(135deg, transparent 0 9px, var(--thumb-stripe) 9px 10px);"
@@ -29,7 +33,7 @@
         {m.label}
       </span>
     </span>
-  </div>
+  </button>
   <div style="padding:13px 14px 13px;display:flex;flex-direction:column;gap:11px;">
     <div
       style="font-size:14px;font-weight:600;letter-spacing:-0.01em;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"

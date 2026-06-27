@@ -27,9 +27,12 @@
      menu/visibility picker is open the card is raised above neighbours (z 50, beating
      the hover z 20) so the dropdown isn't clipped. -->
 <div class="af-card-grid" style={raised ? "z-index:50;" : ""}>
-  <!-- thumbnail -->
-  <div
-    style="position:relative;height:108px;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;"
+  <!-- thumbnail — clickable upper half; opens the artefact like the title does -->
+  <button
+    type="button"
+    onclick={onOpen}
+    aria-label={`Open ${a.title}`}
+    style="position:relative;width:100%;height:108px;padding:0;display:flex;align-items:center;justify-content:center;background:{m.tint};--thumb-stripe:{m.color};border:none;border-bottom:1px solid var(--border);overflow:hidden;border-top-left-radius:12px;border-top-right-radius:12px;cursor:pointer;font-family:inherit;"
   >
     <div
       style="position:absolute;inset:0;opacity:.5;background-image:repeating-linear-gradient(135deg, transparent 0 9px, var(--thumb-stripe) 9px 10px);"
@@ -42,7 +45,7 @@
         {m.label}
       </span>
     </span>
-  </div>
+  </button>
 
   <!-- body -->
   <div style="padding:13px 14px 12px;display:flex;flex-direction:column;gap:10px;">
