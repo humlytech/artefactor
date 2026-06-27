@@ -35,8 +35,9 @@ export const auth = betterAuth({
         google: {
           clientId: env.GOOGLE_CLIENT_ID!,
           clientSecret: env.GOOGLE_CLIENT_SECRET!,
-          // No `hd`: it only restricts a single Workspace domain, and we allow
-          // two (humly.io + humly.co.uk). The create hook below is the boundary.
+          // No `hd`: it only restricts a single Workspace domain, but the
+          // allowlist may permit more than one. The create hook below is the
+          // boundary that gates every provider.
         },
       }
     : undefined,

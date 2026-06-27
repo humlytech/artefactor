@@ -34,13 +34,14 @@ and authorizes against `ownerId` / the access matrix.
 ### Sign-up allowlist (email domain)
 
 Account **creation** is restricted to a configured set of email domains
-(`AUTH_ALLOWED_EMAIL_DOMAINS`, default `humly.io,humly.co.uk`). The check is a pure predicate
+(`AUTH_ALLOWED_EMAIL_DOMAINS`, comma-separated; defaults to `example.com` for dev — set the
+real org domain(s) in production). The check is a pure predicate
 (`domain/identity/email-domain.ts`) enforced in BetterAuth's `databaseHooks.user.create.before`
 hook — so it applies on the *create* path for **every provider** (Google and dev email+pw). A
 disallowed domain can never create an account, and therefore can never sign in. Matching is
-exact and case-insensitive (a subdomain like `x@sub.humly.io` is **not** a match for
-`humly.io`). Google's single-domain `hd` option is deliberately not used, since two domains
-are allowed.
+exact and case-insensitive (a subdomain like `x@sub.example.com` is **not** a match for
+`example.com`). Google's single-domain `hd` option is deliberately not used, since more than
+one domain may be allowed.
 
 ## API keys (programmatic push)
 

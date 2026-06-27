@@ -12,13 +12,16 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
 
-  // A rejected Google sign-in (e.g. a non-Humly account, blocked by the
-  // server-side domain allowlist) bounces back here via errorCallbackURL.
+  // A failed Google sign-in (e.g. an account outside the allowed email domains,
+  // blocked by the server-side allowlist) bounces back here via errorCallbackURL.
+  // Surface the real reason BetterAuth reports rather than assuming the cause.
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
-    if (params.has("auth_error")) {
-      error =
-        "That Google account isn't allowed. Sign in with your @humly.io or @humly.co.uk account.";
+    const detail = params.get("error_description") || params.get("error");
+    if (params.has("auth_error") || detail) {
+      error = detail
+        ? `Google sign-in failed: ${decodeURIComponent(detail).replace(/[_+]/g, " ")}`
+        : "Google sign-in failed. Make sure you're using an authorized account.";
       window.history.replaceState({}, "", window.location.pathname);
     }
   }
@@ -87,7 +90,7 @@
         Continue with Google
       </button>
       <p style="font-size:11.5px;color:var(--muted-fg);text-align:center;margin:10px 2px 0;">
-        Use your <strong>@humly.io</strong> or <strong>@humly.co.uk</strong> Google account.
+        Use your organization Google account.
       </p>
 
       {#if error}

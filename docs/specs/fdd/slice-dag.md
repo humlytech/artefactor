@@ -43,7 +43,8 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   + password**. Production disables email+password (`emailAndPassword.enabled = NODE_ENV !==
   "production"`), removing the open unverified sign-up path from prod.
 - Account creation is restricted to allowed email domains (`AUTH_ALLOWED_EMAIL_DOMAINS`,
-  default `humly.io,humly.co.uk`), enforced for every provider via the user-create hook. *(IA 4)*
+  default `example.com` for dev; org domains set in prod), enforced for every provider via the
+  user-create hook. *(IA 4)*
 - An authenticated session exposes a stable `ownerId` to the BFF.
 - Protected endpoints reject unauthenticated requests. *(IA 1)*
 

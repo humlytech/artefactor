@@ -17,7 +17,7 @@ export function emailDomain(email: string): string | null {
 
 /**
  * Whether `email`'s domain is in `allowedDomains` (exact, case-insensitive
- * match — a subdomain like `x@sub.humly.io` is NOT a match for `humly.io`).
+ * match — a subdomain like `x@sub.example.com` is NOT a match for `example.com`).
  */
 export function isEmailDomainAllowed(
   email: string,

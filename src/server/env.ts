@@ -36,7 +36,8 @@ const schema = z.object({
   // (IA invariant 4). Comma-separated; matched case-insensitively, exact domain.
   AUTH_ALLOWED_EMAIL_DOMAINS: z
     .string()
-    .default("humly.io,humly.co.uk")
+    // Generic dev/test default; set the real org domain(s) in production via env.
+    .default("example.com")
     .transform((s) =>
       s
         .split(",")
