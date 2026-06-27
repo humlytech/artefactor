@@ -527,12 +527,15 @@
     </div>
   </div>
 
-  <!-- click-away overlay for transient menus -->
+  <!-- Click-away for transient menus. Sits ABOVE page content (z 0) but BELOW the
+       sticky header (z 20): the header's backdrop-filter + z-index create a stacking
+       context that traps the account menu, so the click-away must stay under the
+       header for that menu to remain clickable. All menus (35–40) render above it. -->
   {#if overlay.any}
     <div
       onclick={() => overlay.close()}
       role="presentation"
-      style="position:fixed;inset:0;z-index:30;"
+      style="position:fixed;inset:0;z-index:15;"
     ></div>
   {/if}
 
