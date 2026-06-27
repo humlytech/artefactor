@@ -26,6 +26,12 @@ RUN pnpm prune --prod
 FROM node:26-bookworm-slim AS runtime
 WORKDIR /app
 
+# curl is used by the container healthcheck — Coolify probes GET /health from
+# *inside* the container, and bookworm-slim ships no curl/wget by default.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
 # Stamp the build commit (passed by CI as --build-arg GIT_SHA=<sha>); surfaced at
 # GET /health so a deploy can be confirmed against the shipped commit.
 ARG GIT_SHA=dev

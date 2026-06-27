@@ -124,7 +124,9 @@ How much work this is depends on the **fork's visibility**:
      health check on 3000 gets `Connection refused`. The giveaway in the deploy log is the
      startup line `Artefactor listening on http://localhost:80`.
    - **Health check:** enable; path `/health`, port `3000`, expect `200`. (Unauthenticated by
-     design — returns `{"status":"ok","uptime":…,"build":"<sha>"}`.)
+     design — returns `{"status":"ok","uptime":…,"build":"<sha>"}`.) Coolify runs this probe
+     **inside the container** with `curl`; the runtime image (Debian `bookworm-slim`, which
+     ships no curl/wget) installs `curl` precisely for this — see the [Dockerfile](../Dockerfile).
 4. **Persistent Storage → + Add Volume Mount:** name `artefactor-data`, destination `/data`.
    The image declares `/data` as a volume; the named volume holds the SQLite DB **and** the
    artefact payloads, and survives redeploys.
