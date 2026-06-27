@@ -12,6 +12,13 @@ export interface HealthResponse {
   build: string;
 }
 
+// Public (unauthenticated) BFF config the sign-in screen needs before a session
+// exists. `allowedEmailDomains` mirrors AUTH_ALLOWED_EMAIL_DOMAINS so the UI can
+// show which accounts may sign in without hardcoding domains in the client.
+export interface PublicConfigResponse {
+  allowedEmailDomains: string[];
+}
+
 // S1 — Identity. The current authenticated identity, as returned by the
 // protected `GET /api/me` endpoint. `id` is the domain's stable `ownerId`.
 export interface MeResponse {

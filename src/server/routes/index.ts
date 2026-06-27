@@ -11,7 +11,11 @@ import {
 import { attachSession, requireAuth, type AuthEnv } from "../middleware/auth";
 import { createArtefactRoutes, toArtefactSummary } from "./artefacts";
 import { createDataRoutes } from "./data";
-import type { MeResponse, SharedListResponse } from "../../shared/contracts";
+import type {
+  MeResponse,
+  PublicConfigResponse,
+  SharedListResponse,
+} from "../../shared/contracts";
 
 // BFF API routes. One module per feature slice is mounted here from S1 onward.
 export function createApiRoutes() {
@@ -38,6 +42,15 @@ export function createApiRoutes() {
   api.use("*", attachSession);
 
   api.get("/ping", (c) => c.json({ pong: true }));
+
+  // Public config the sign-in screen reads before any session exists — exposes
+  // the allowed email domains so the UI can show them without hardcoding (these
+  // aren't secret; they're shown in the UI hint anyway).
+  api.get("/config", (c) =>
+    c.json<PublicConfigResponse>({
+      allowedEmailDomains: env.AUTH_ALLOWED_EMAIL_DOMAINS,
+    }),
+  );
 
   // Protected: the current identity. Encodes IA invariant 1 — `requireAuth`
   // rejects unauthenticated callers with 401; otherwise returns the ownerId.

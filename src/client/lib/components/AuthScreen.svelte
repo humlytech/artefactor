@@ -1,9 +1,27 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { authClient, signIn, signUp } from "../auth";
+  import { api } from "../api";
   import Icon from "./Icon.svelte";
 
   // Production is Google-only; the email+password form is a dev convenience.
   const devAuth = import.meta.env.DEV;
+
+  // Allowed sign-in domains, read from the server (AUTH_ALLOWED_EMAIL_DOMAINS)
+  // so the hint reflects the real config without hardcoding domains here.
+  let allowedDomains = $state<string[]>([]);
+  const domainsHint = $derived(
+    allowedDomains.length
+      ? allowedDomains.map((d) => `@${d}`).join(" or ")
+      : null,
+  );
+  onMount(async () => {
+    try {
+      allowedDomains = (await api.config()).allowedEmailDomains;
+    } catch {
+      // Leave empty → fall back to generic copy.
+    }
+  });
 
   let mode = $state<"sign-in" | "sign-up">("sign-in");
   let name = $state("");
@@ -90,7 +108,11 @@
         Continue with Google
       </button>
       <p style="font-size:11.5px;color:var(--muted-fg);text-align:center;margin:10px 2px 0;">
-        Use your organization Google account.
+        {#if domainsHint}
+          Use your <strong>{domainsHint}</strong> Google account.
+        {:else}
+          Use your organization Google account.
+        {/if}
       </p>
 
       {#if error}

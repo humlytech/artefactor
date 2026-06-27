@@ -24,6 +24,14 @@ describe("identity (S1)", () => {
     expect(res.status).toBe(401);
   });
 
+  it("exposes the allowed email domains via public /api/config", async () => {
+    const res = await app.request("/api/config");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { allowedEmailDomains: string[] };
+    // Set by the test setup (AUTH_ALLOWED_EMAIL_DOMAINS).
+    expect(body.allowedEmailDomains).toEqual(["example.com", "example.org"]);
+  });
+
   it("signs a user up and exposes their ownerId via /api/me", async () => {
     const signUp = await app.request("/api/auth/sign-up/email", {
       method: "POST",
@@ -57,7 +65,7 @@ describe("identity (S1)", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: "mallory@not-humly.test",
+        email: "mallory@not-allowed.test",
         password: "correct-horse-battery",
         name: "Mallory",
       }),
@@ -69,7 +77,7 @@ describe("identity (S1)", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: "mallory@not-humly.test",
+        email: "mallory@not-allowed.test",
         password: "correct-horse-battery",
       }),
     });

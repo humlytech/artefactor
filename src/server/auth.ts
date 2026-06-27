@@ -13,7 +13,7 @@ import { isEmailDomainAllowed } from "../domain/identity/email-domain";
 //
 // Two methods, both via BetterAuth:
 //   - Google OAuth (social sign-in) — the production method. Google verifies the
-//     email; the allowlist below then gates it to Humly's domains.
+//     email; the allowlist below then gates it to the configured domains.
 //   - Email + password — enabled only outside production, for zero-config local
 //     dev and the test suite.
 const googleConfigured = Boolean(

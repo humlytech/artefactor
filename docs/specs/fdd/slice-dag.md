@@ -73,7 +73,7 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   protected endpoint, returning the caller's `ownerId`.
 - **Client** (`src/client/lib/auth.ts`): `createAuthClient` from `better-auth/svelte`;
   `AuthScreen.svelte` leads with **Continue with Google** (`signIn.social`, with an
-  `errorCallbackURL` so a rejected non-Humly account shows a friendly message) and exposes the
+  `errorCallbackURL` so a rejected out-of-domain account shows a friendly message) and exposes the
   email+password form only in dev (`import.meta.env.DEV`).
 - **Tests:** `requireAuth` guard unit test plus an end-to-end `identity.test.ts` that signs a
   user up against a throwaway SQLite db and round-trips `/api/me` (IA 1) and rejects a

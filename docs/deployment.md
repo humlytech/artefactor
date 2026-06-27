@@ -1,7 +1,7 @@
 # Deployment — production on UpCloud via Coolify
 
 The production setup, end to end. Following this document from top to bottom takes Artefactor
-from "code on `main`" to "running at **https://artefactor.humly.io** with durable storage,
+from "code on `main`" to "running at **https://<domain>** with durable storage,
 HTTPS, and automatic deploys on every push to `main`."
 
 ```text
@@ -10,12 +10,12 @@ push to main  (humlytech/artefactor)
        ├─ gate: pnpm test + pnpm check        (.github/workflows/ci.yml)
        ├─ docker build → push ghcr.io/humlytech/artefactor  (:latest + :<sha>)
        └─ curl Coolify deploy webhook
-            └─ Coolify (Humly's instance) → existing UpCloud VPS (se-sto1)
+            └─ Coolify (your instance) → existing UpCloud VPS (se-sto1)
                  ├─ container: BFF :3000 serving API + SPA, NODE_ENV=production
                  ├─ named volume artefactor-data → /data
                  │     ├─ /data/artefactor.db   (SQLite, DATABASE_PATH)
                  │     └─ /data/payloads/        (artefact HTML, up to 100 MB each)
-                 └─ Coolify proxy: https://artefactor.humly.io  (Let's Encrypt)
+                 └─ Coolify proxy: https://<domain>  (Let's Encrypt)
 UpCloud Backups: scheduled snapshots of the whole VPS (including the volume)
 ```
 
@@ -38,7 +38,8 @@ Design decisions baked into this setup:
   (`src/server/env.ts`) then refuses to start unless `BETTER_AUTH_SECRET` is set to something
   other than the dev placeholder. The insecure dev default cannot reach prod by accident.
 
-Placeholders used below: `<coolify-url>` (Humly's Coolify instance), `<vps-ip>` (the existing
+Placeholders used below: `<domain>` (the public hostname you serve at, e.g.
+`artefactor.example.com`), `<coolify-url>` (your Coolify instance), `<vps-ip>` (the existing
 VPS's public IP), `<app-uuid>` (assigned when the Coolify app is created).
 
 ---
@@ -61,7 +62,7 @@ Production deploys from **`humlytech/artefactor`**, not the personal `oskarhagbe
 
 ## 2. The Coolify server (already exists — reuse)
 
-Artefactor runs on a VPS Coolify already manages (the same instance that runs the other Humly
+Artefactor runs on a VPS Coolify already manages (the same instance that runs your other
 apps). Nothing to provision. Just note, in Coolify → **Servers**, which server you'll target
 and its public IP → that's `<vps-ip>` for the DNS record in step 3. Leave its proxy on the
 default (Traefik) — it handles HTTPS in step 5.
@@ -72,7 +73,7 @@ Cleanup** (Server → settings) is enabled so old images are pruned.
 
 ## 3. DNS
 
-Add an **A record**: `artefactor.humly.io → <vps-ip>` (the existing VPS's IP). Do this
+Add an **A record**: `<domain> → <vps-ip>` (the existing VPS's IP). Do this
 before creating the app so Let's Encrypt validation succeeds on the first deploy.
 
 ## 4. Let the VPS pull from GHCR
@@ -83,7 +84,7 @@ How much work this is depends on the **fork's visibility**:
   the `humlytech` fork is also public, the GHCR package is public and the VPS pulls with no
   credentials. **Skip the rest of this step.**
 - **Private fork → private package.** The VPS must authenticate to pull. Reuse the
-  **Humly-Bot** machine account (the same one the other Humly apps already use):
+  **Humly-Bot** machine account (the same one your other private-image apps already use):
   1. Give Humly-Bot **Read** on `humlytech/artefactor` (a package pushed by the workflow's
      `GITHUB_TOKEN` inherits the repo's access, so repo read = package pull). Skip if Humly-Bot
      already has read via an org team.
@@ -116,7 +117,7 @@ How much work this is depends on the **fork's visibility**:
    - **Image:** `ghcr.io/humlytech/artefactor:latest`
    - **Server:** the existing VPS from step 2.
 3. Application settings:
-   - **Domains:** `https://artefactor.humly.io` (the `https://` prefix makes the proxy issue a
+   - **Domains:** `https://<domain>` (the `https://` prefix makes the proxy issue a
      Let's Encrypt cert).
    - **Ports Exposes** (the Coolify field's literal name): `3000`. This must be right for two
      reasons: the proxy routes the domain to this port, **and Coolify injects a `PORT` env var
@@ -138,11 +139,11 @@ How much work this is depends on the **fork's visibility**:
    | Variable | Value | Notes |
    |---|---|---|
    | `BETTER_AUTH_SECRET` | `openssl rand -hex 32` | **Secret. Required in prod** — the BFF refuses to boot with the dev placeholder. Rotating it signs everyone out. |
-   | `BETTER_AUTH_URL` | `https://artefactor.humly.io` | Public base URL BetterAuth issues session cookies/callbacks against. |
+   | `BETTER_AUTH_URL` | `https://<domain>` | Public base URL BetterAuth issues session cookies/callbacks against. |
    | `GOOGLE_CLIENT_ID` | from the Google OAuth client | **Required in prod** (Google-only auth). See §5a. |
    | `GOOGLE_CLIENT_SECRET` | from the Google OAuth client | **Secret. Required in prod.** See §5a. |
    | `AUTH_ALLOWED_EMAIL_DOMAINS` | your org domain(s), e.g. `example.com,example.org` | **Set this in prod.** Comma-separated; account creation is restricted to these domains (every provider). The code default is `example.com` (dev only). |
-   | `AUTH_TRUSTED_ORIGINS` | `https://artefactor.humly.io` | Optional. The `BETTER_AUTH_URL` origin is trusted implicitly and the SPA is same-origin, so this is usually unnecessary — set it only if a separate origin must call the auth API. |
+   | `AUTH_TRUSTED_ORIGINS` | `https://<domain>` | Optional. The `BETTER_AUTH_URL` origin is trusted implicitly and the SPA is same-origin, so this is usually unnecessary — set it only if a separate origin must call the auth API. |
 
    Already baked into the image (no need to set): `NODE_ENV=production`, `PORT=3000`,
    `DATABASE_PATH=/data/artefactor.db`, `ARTEFACTOR_PAYLOAD_DIR=/data/payloads`,
@@ -174,7 +175,7 @@ Create one OAuth client and reuse it for prod (and optionally local dev):
 3. **APIs & Services → Credentials → + Create credentials → OAuth client ID:**
    - **Application type:** Web application.
    - **Authorized redirect URIs:**
-     - `https://artefactor.humly.io/api/auth/callback/google` (production)
+     - `https://<domain>/api/auth/callback/google` (production)
      - `http://localhost:3000/api/auth/callback/google` (optional, for local dev)
 
      The path is always `<BETTER_AUTH_URL>/api/auth/callback/google`.
@@ -231,7 +232,7 @@ may display it as `ci / gate`).
 2. Watch Coolify → the application → **Deployments**: it pulls the image and starts the
    container; the health check flips it to *healthy* (`Running (healthy)`).
 3. Verify, in order:
-   - `curl https://artefactor.humly.io/health` → `{"status":"ok","uptime":…,"build":"<sha>"}`
+   - `curl https://<domain>/health` → `{"status":"ok","uptime":…,"build":"<sha>"}`
      where `<sha>` is the commit the workflow just shipped (also proves DNS + TLS).
    - Open the site → **Continue with Google** with an account in an allowed domain → you land
      signed in (proves the Google client, `BETTER_AUTH_URL`, the callback URL, and Secure

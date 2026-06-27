@@ -2,6 +2,7 @@ import type {
   ArtefactSummary,
   ArtefactListResponse,
   MeResponse,
+  PublicConfigResponse,
   SharedArtefactSummary,
   SharedListResponse,
 } from "../../shared/contracts";
@@ -33,6 +34,10 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  config(): Promise<PublicConfigResponse> {
+    return fetch("/api/config").then(json<PublicConfigResponse>);
+  },
+
   me(): Promise<MeResponse> {
     return fetch("/api/me").then(json<MeResponse>);
   },
