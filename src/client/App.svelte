@@ -22,6 +22,7 @@
   import GalleryCard from "$lib/components/GalleryCard.svelte";
   import GalleryRow from "$lib/components/GalleryRow.svelte";
   import UploadModal from "$lib/components/UploadModal.svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import Toast from "$lib/components/Toast.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
 
@@ -47,6 +48,10 @@
   let editing = $state<ArtefactSummary | null>(null);
   let uploadBusy = $state(false);
   let uploadError = $state<string | null>(null);
+
+  // ---- permanent-delete confirmation (archived only) ----
+  let pendingDelete = $state<ArtefactSummary | null>(null);
+  let deleteBusy = $state(false);
 
   const user = $derived(
     $session.data
@@ -239,6 +244,27 @@
         e instanceof ApiError ? e.message : "Could not restore",
         TOAST_ICONS.alert,
       );
+    }
+  }
+
+  // Permanent delete — gated behind the confirmation dialog (archived only).
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    deleteBusy = true;
+    try {
+      await api.delete(pendingDelete.id);
+      const title = pendingDelete.title;
+      pendingDelete = null;
+      await loadArchived();
+      toast.show(`“${title}” deleted`, TOAST_ICONS.trash);
+    } catch (e) {
+      pendingDelete = null;
+      toast.show(
+        e instanceof ApiError ? e.message : "Could not delete",
+        TOAST_ICONS.alert,
+      );
+    } finally {
+      deleteBusy = false;
     }
   }
 
@@ -517,6 +543,14 @@
                       <Icon paths={["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5"]} size={14} />
                       Restore
                     </button>
+                    <button
+                      onclick={() => (pendingDelete = r)}
+                      title="Delete permanently"
+                      aria-label="Delete permanently"
+                      style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--border);background:var(--card);color:var(--destructive);border-radius:8px;cursor:pointer;font-family:inherit;"
+                    >
+                      <Icon paths={["M3 6h18", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M10 11v6", "M14 11v6"]} size={14} />
+                    </button>
                   </div>
                 {/each}
               </div>
@@ -546,6 +580,17 @@
       serverError={uploadError}
       onClose={closeUpload}
       onSubmit={submitUpload}
+    />
+  {/if}
+
+  {#if pendingDelete}
+    <ConfirmDialog
+      title="Delete permanently?"
+      message={`“${pendingDelete.title}” and all its saved data will be permanently deleted. This can’t be undone.`}
+      confirmLabel="Delete permanently"
+      busy={deleteBusy}
+      onConfirm={confirmDelete}
+      onClose={() => (pendingDelete = null)}
     />
   {/if}
 

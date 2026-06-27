@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   archiveArtefact,
+  assertDeletable,
   createArtefact,
   editArtefact,
   restoreArtefact,
@@ -179,6 +180,17 @@ describe("archiveArtefact / restoreArtefact (S7)", () => {
 
   it("rejects restoring an artefact that is not archived", () => {
     expect(() => restoreArtefact(createArtefact(base))).toThrow(InvariantViolation);
+  });
+});
+
+describe("assertDeletable (S15, AH11)", () => {
+  it("permits deleting an archived artefact", () => {
+    const archived = archiveArtefact(createArtefact(base));
+    expect(() => assertDeletable(archived)).not.toThrow();
+  });
+
+  it("rejects deleting an active artefact", () => {
+    expect(() => assertDeletable(createArtefact(base))).toThrow(InvariantViolation);
   });
 });
 

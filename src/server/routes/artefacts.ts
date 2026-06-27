@@ -16,6 +16,7 @@ import {
 } from "../artefacts/edit-artefact.command";
 import {
   archiveArtefactCommand,
+  deleteArtefactCommand,
   restoreArtefactCommand,
 } from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
@@ -202,6 +203,27 @@ export function createArtefactRoutes(deps: ArtefactRoutesDeps) {
         { repo: deps.repo },
       );
       return c.json<ArtefactSummary>(toArtefactSummary(updated));
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
+      if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // S15 — Permanent delete (AH11). Owner-only; allowed only for an archived
+  // artefact. Non-owner / unknown → 404; active (not archived) → 400. Removes
+  // the row, its payload file, and all its data entries. 204 on success.
+  r.delete("/:id", requireAuth, async (c) => {
+    try {
+      await deleteArtefactCommand(
+        { artefactId: c.req.param("id"), requesterId: ownerId(c) },
+        {
+          repo: deps.repo,
+          dataRepo: deps.dataRepo,
+          payloadStore: deps.payloadStore,
+        },
+      );
+      return c.body(null, 204);
     } catch (err) {
       if (err instanceof ArtefactNotFound) return c.json({ error: "not found" }, 404);
       if (err instanceof InvariantViolation) return c.json({ error: err.message }, 400);

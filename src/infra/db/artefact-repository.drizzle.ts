@@ -26,6 +26,13 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .onConflictDoUpdate({ target: artefact.id, set: row });
   }
 
+  // Permanent delete (AH11). The data_entry FK is ON DELETE CASCADE, so the
+  // artefact's data rows are removed with it; the payload file is removed
+  // separately by the delete command.
+  async delete(id: string): Promise<void> {
+    await this.db.delete(artefact).where(eq(artefact.id, id));
+  }
+
   async findById(id: string): Promise<Artefact | null> {
     const [row] = await this.db
       .select()

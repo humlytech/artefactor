@@ -42,6 +42,10 @@ describe("edit + archive/restore (S3, S7)", () => {
     return app.request(path, { method: "POST", headers: cookie ? { cookie } : {} });
   }
 
+  function del(path: string, cookie?: string) {
+    return app.request(path, { method: "DELETE", headers: cookie ? { cookie } : {} });
+  }
+
   async function listTitles(cookie: string, archived = false) {
     const res = await app.request(`/api/artefacts${archived ? "?archived=true" : ""}`, {
       headers: { cookie },
@@ -131,6 +135,33 @@ describe("edit + archive/restore (S3, S7)", () => {
 
       const b = await create(owner, "StillActive");
       expect((await post(`/api/artefacts/${b.id}/restore`, owner)).status).toBe(400);
+    });
+  });
+
+  describe("delete (S15, AH11)", () => {
+    it("refuses to delete an active artefact (400) — must archive first", async () => {
+      const a = await create(owner, "ActiveDelete");
+      expect((await del(`/api/artefacts/${a.id}`, owner)).status).toBe(400);
+      expect(await listTitles(owner)).toContain("ActiveDelete");
+    });
+
+    it("permanently deletes an archived artefact (204), gone everywhere after", async () => {
+      const a = await create(owner, "DeleteMe");
+      expect((await post(`/api/artefacts/${a.id}/archive`, owner)).status).toBe(200);
+      expect((await del(`/api/artefacts/${a.id}`, owner)).status).toBe(204);
+      expect(await listTitles(owner, true)).not.toContain("DeleteMe");
+      expect((await app.request(`/api/artefacts/${a.id}`, { headers: { cookie: owner } })).status).toBe(404);
+      // A second delete now sees nothing to delete → not-found.
+      expect((await del(`/api/artefacts/${a.id}`, owner)).status).toBe(404);
+    });
+
+    it("rejects a non-owner delete (404) and the anonymous (401)", async () => {
+      const a = await create(owner, "GuardedDelete");
+      await post(`/api/artefacts/${a.id}/archive`, owner);
+      expect((await del(`/api/artefacts/${a.id}`, other)).status).toBe(404);
+      expect((await del(`/api/artefacts/${a.id}`)).status).toBe(401);
+      // Still there for the owner.
+      expect(await listTitles(owner, true)).toContain("GuardedDelete");
     });
   });
 });

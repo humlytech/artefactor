@@ -1,9 +1,12 @@
 import {
   archiveArtefact,
+  assertDeletable,
   restoreArtefact,
   type Artefact,
 } from "../../domain/artefact/artefact";
 import type { ArtefactRepository } from "../../domain/artefact/artefact-repository";
+import type { DataRepository } from "../../domain/data/data-repository";
+import type { PayloadStore } from "../../domain/artefact/ports";
 import { loadOwnActiveArtefact, loadOwnArtefact } from "./get-own-artefact";
 
 // Application commands for S7 — Archive / restore. Owner-only lifecycle moves;
@@ -16,6 +19,14 @@ export interface LifecycleInput {
 export interface LifecycleDeps {
   repo: ArtefactRepository;
   now?: () => Date;
+}
+
+// Permanent delete (S15, AH11) needs to remove the payload file and the data
+// entries alongside the aggregate row, so it carries extra ports.
+export interface DeleteArtefactDeps {
+  repo: ArtefactRepository;
+  dataRepo: DataRepository;
+  payloadStore: PayloadStore;
 }
 
 // Archive an active artefact the caller owns (AH7). Non-owner / unknown /
@@ -46,4 +57,23 @@ export async function restoreArtefactCommand(
   const restored = restoreArtefact(existing, { now: deps.now?.() });
   await deps.repo.save(restored);
   return restored;
+}
+
+// Permanently delete an archived artefact the caller owns (S15, AH11). Loads
+// regardless of status (non-owner / unknown → not-found, so existence doesn't
+// leak); `assertDeletable` rejects a non-archived one (→ InvariantViolation).
+// Removes the payload file and data entries before the row so nothing is
+// orphaned (the data_entry FK cascade is a DB-level backstop).
+export async function deleteArtefactCommand(
+  input: LifecycleInput,
+  deps: DeleteArtefactDeps,
+): Promise<void> {
+  const existing = await loadOwnArtefact(deps.repo, {
+    id: input.artefactId,
+    ownerId: input.requesterId,
+  });
+  assertDeletable(existing);
+  await deps.payloadStore.delete(existing.payloadRef);
+  await deps.dataRepo.deleteByArtefact(existing.id);
+  await deps.repo.delete(existing.id);
 }

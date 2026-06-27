@@ -53,6 +53,9 @@ Aggregate root. The consistency boundary for one hosted artefact.
    visibility, archive, or restore an artefact — at any visibility tier.
 10. **Ingestion parity**: artefacts created by **API push** satisfy the exact same
     invariants as **manual upload**; there is no privileged path that bypasses them.
+11. **Delete is archived-only**: an artefact may be permanently deleted only while
+    `archived`, only by its owner; deletion also removes its payload file and all its data
+    entries.
 
 ## Access matrix (active artefacts)
 
@@ -78,9 +81,13 @@ States are the product of `visibility × status`. Allowed transitions:
 | **change tier** | `active` / `authenticated` ⇄ `public` | (same status) | owner |
 | **archive** | `active` | `archived` | owner |
 | **restore** | `archived` | `active` | owner; restores prior `visibility` |
+| **delete** | `archived` | — (removed) | owner; **only an archived artefact** may be permanently deleted |
 
-> Hard delete is **out of scope** for v0.2 (soft-delete/archive only). Revisit if a
-> permanent-purge requirement appears.
+> **Permanent delete** removes an artefact for good and is allowed **only from `archived`**
+> (an active artefact must be archived first). Deletion removes the aggregate row, its
+> **payload file**, and **all its data entries** (the data context is owned by the artefact —
+> see Relationship to Artefact Data). It is irreversible; the UI gates it behind an explicit
+> confirmation. Soft-delete (archive) remains the default lifecycle.
 
 ## Serving model
 

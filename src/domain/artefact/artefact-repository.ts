@@ -11,6 +11,9 @@ export interface ListByOwnerOptions {
 // and the in-memory test double both implement this.
 export interface ArtefactRepository {
   save(artefact: Artefact): Promise<void>;
+  // Permanently remove an artefact by id (AH11). Archived-only is enforced by
+  // the delete command, not here. A no-op if the id does not exist.
+  delete(id: string): Promise<void>;
   findById(id: string): Promise<Artefact | null>;
   findBySlug(slug: string): Promise<Artefact | null>;
   // Owner's artefacts, most-recently-updated first. Active-only by default.

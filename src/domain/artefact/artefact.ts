@@ -178,3 +178,13 @@ export function restoreArtefact(a: Artefact, options?: { now?: Date }): Artefact
   const now = options?.now ?? new Date();
   return { ...a, status: "active", archivedAt: null, updatedAt: now };
 }
+
+// Permanent delete guard (AH11): only an archived artefact may be deleted. Unlike
+// archive/restore this produces no new aggregate — deletion is a removal — so the
+// rule is a pure guard the delete command calls before removing the row, its
+// payload, and its data entries.
+export function assertDeletable(a: Artefact): void {
+  if (a.status !== "archived") {
+    throw new InvariantViolation("only an archived artefact can be deleted");
+  }
+}

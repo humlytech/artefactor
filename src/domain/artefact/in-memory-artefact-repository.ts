@@ -13,6 +13,10 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
     this.store.set(artefact.id, { ...artefact });
   }
 
+  async delete(id: string): Promise<void> {
+    this.store.delete(id);
+  }
+
   async findById(id: string): Promise<Artefact | null> {
     const found = this.store.get(id);
     return found ? { ...found } : null;

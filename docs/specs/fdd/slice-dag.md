@@ -362,9 +362,35 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   → a signed-in viewer sees others' shared artefacts, never their own nor others' private;
   each enriched with the owner's identity; `401` unauthenticated).
 
+### S15 — Permanent delete (archived only) — **done**
+- The owner permanently deletes an **archived** artefact, confirmed via a modal dialog; an
+  active artefact must be archived first. Deletion removes the row, its payload file, and all
+  its data entries. *(AH 11)*
+
+**Implementation notes (from building S15):**
+- **Domain** `assertDeletable(a)` (`artefact.ts`): pure guard — throws `InvariantViolation`
+  unless `status === "archived"`. Deletion produces no new aggregate, so it's a guard, not a
+  transition.
+- **Ports**: `ArtefactRepository.delete(id)` and `DataRepository.deleteByArtefact(id)` (both
+  in-memory + Drizzle). The `data_entry → artefact` FK is `ON DELETE CASCADE` (DB backstop);
+  the command also deletes explicitly so it's adapter-agnostic + testable.
+- **Command** `deleteArtefactCommand` (`lifecycle.command.ts`): loads the owned artefact
+  (regardless of status → non-owner/unknown is 404), `assertDeletable`, then deletes the
+  **payload file** (`PayloadStore.delete`), the **data entries**, and the **row** (in that
+  order, so nothing is orphaned).
+- **BFF** `DELETE /api/artefacts/:id` (`requireAuth`): 204 on success, 404 unknown/non-owner,
+  400 if not archived.
+- **Client**: a trash button in each archived row opens `ConfirmDialog.svelte` (destructive
+  confirm); `api.delete(id)` → reload archived list + toast. Active artefacts are never
+  deletable from the UI (delete is only offered in the Archived section).
+- **Tests:** domain (`assertDeletable` archived-ok / active-throws); command (deletes
+  archived + payload + all authors' data; refuses active → `InvariantViolation`; non-owner →
+  `ArtefactNotFound`); end-to-end (`active → 400`, `archive → delete → 204` then gone
+  everywhere + second delete 404, non-owner 404 / anonymous 401).
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14}**,
-**S11 → {S12, S13}**, **S1 → S8 → S9**. S10 can land early (right after S2) to give a
-working surface to iterate against. The data-store branch (S11–S13) is independent of the
-sharing branch and can proceed in parallel once S2 exists.
+**S7 → S15**, **S11 → {S12, S13}**, **S1 → S8 → S9**. S10 can land early (right after S2) to
+give a working surface to iterate against. The data-store branch (S11–S13) is independent of
+the sharing branch and can proceed in parallel once S2 exists.

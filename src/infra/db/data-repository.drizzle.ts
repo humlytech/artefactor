@@ -57,6 +57,10 @@ export class DrizzleDataRepository implements DataRepository {
       );
   }
 
+  async deleteByArtefact(artefactId: string): Promise<void> {
+    await this.db.delete(dataEntry).where(eq(dataEntry.artefactId, artefactId));
+  }
+
   async listAuthorsByArtefact(artefactId: string): Promise<DataAuthorRef[]> {
     const rows = await this.db
       .select({ authorId: dataEntry.authorId, updatedAt: dataEntry.updatedAt })

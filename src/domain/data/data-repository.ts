@@ -21,6 +21,9 @@ export interface DataRepository {
     artefactId: string,
     authorId: string,
   ): Promise<void>;
+  // Remove every entry for an artefact (all authors) — used when the artefact is
+  // permanently deleted (AH11). A no-op if there are none.
+  deleteByArtefact(artefactId: string): Promise<void>;
   // S12 — authors who have an entry for this artefact, for the host switcher.
   listAuthorsByArtefact(artefactId: string): Promise<DataAuthorRef[]>;
 }

@@ -90,7 +90,9 @@ code in sync in the same commit.
   another user's data is a **host UI** feature (user-picker re-seeds the artefact read-only),
   outside the artefact container. See `docs/specs/ddd/artefact-data.md`.
 - **Versioning:** none — single mutable payload, edited in place.
-- **Lifecycle:** soft-delete via **archive/restore** (no hard delete in v0.2).
+- **Lifecycle:** soft-delete via **archive/restore**; an **archived** artefact can then be
+  **permanently deleted** (owner-only, confirmed in the UI) — removing its row, payload file,
+  and data entries. Active artefacts must be archived first.
 
 ## Development process
 

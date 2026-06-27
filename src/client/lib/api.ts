@@ -105,6 +105,12 @@ export const api = {
     const res = await fetch(`/api/artefacts/${id}/restore`, { method: "POST" });
     if (!res.ok) await fail(res);
   },
+
+  // Permanently delete an archived artefact (S15). 204 No Content on success.
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`/api/artefacts/${id}`, { method: "DELETE" });
+    if (!res.ok) await fail(res);
+  },
 };
 
 /** Absolute share URL for a shared artefact, or null while private. */
