@@ -23,15 +23,16 @@ S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
         │                     ├──► S10 Your artefacts (list own artefacts)
         │                     └──► S11 Store: read/write own data blob
         │                                  ├──► S12 Host UI: data-context switcher (load another author, read-only)
-        │                                  ├──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
-        │                                  └──► S17 Data merge-patch (PATCH …/data/me, RFC 7396)
+        │                                  └──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
         │
         └────────────► S18 MCP connector (remote MCP server + OAuth via BetterAuth `mcp` plugin;
-                              wraps the Hosting + Data commands as tools — needs S2, S3, S5, S7, S17)
+                              wraps the Hosting commands as tools — needs S2, S3, S5, S7)
 
 ~~S8 Issue / revoke API key~~ and ~~S9 API push ingestion~~ are **dropped** — the pinned
 better-auth has no api-key plugin and a raw token API was deemed unnecessary; programmatic
 access is the MCP connector (S18), authenticated by OAuth, not API keys.
+~~S17 Data merge-patch~~ is also **dropped** — a backend merge would parse the blob and break
+its opacity; data writes stay whole-blob `PUT`s and the artefact owns shape compatibility.
 ```
 
 ## Slices & acceptance criteria
@@ -431,16 +432,13 @@ OAuth. See the DDD amendment in `ddd/identity-access.md` ("Programmatic access")
   command (grant/revoke owner-only, idempotency), end-to-end (selected mints slug; member can
   view + non-member 404 + anonymous 404; member sees it in "Shared with you"; user search).
 
-### S17 — Data merge-patch (`PATCH …/data/me`)
-- An authenticated caller merges a partial blob into their own entry via **RFC 7396 JSON
-  Merge Patch** (object recurses, `null` deletes a key, else replace), absent entry = `{}`.
-  *(AD 1, 2)*
-- Both the current blob and the patch must be JSON **objects**; a non-object blob or non-JSON
-  body → `400`. The merged result must stay valid JSON within `MAX_BLOB_BYTES` → `413`. *(AD 8)*
-- Same gating as the other `/me` verbs: auth required (no anonymous write), own entry only,
-  archived / not-viewable artefact → `404`. *(AD 3, 6)*
-- Built so the MCP connector (S18) can update an artefact's data without resending the whole
-  blob; the runtime shim keeps using `PUT` (full replace).
+### S17 — Data merge-patch — **dropped**
+A partial-update (RFC 7396 merge) endpoint would force the backend to parse and transform the
+data blob, breaking its opacity invariant (`ddd/artefact-data.md`). Data writes stay
+whole-blob `PUT`s; an artefact owns its own data-shape compatibility (versioned `localStorage`
+keys), and a breaking shape change is published as a new artefact. The MCP connector therefore
+exposes **no data-write tool** — it surfaces `dataAuthorCount` so a breaking HTML update can be
+flagged (see S18).
 
 ### S18 — MCP connector (remote MCP server + OAuth)
 - Artefactor exposes a **remote MCP server** at `POST /mcp` (Streamable HTTP) that Claude
@@ -449,10 +447,13 @@ OAuth. See the DDD amendment in `ddd/identity-access.md` ("Programmatic access")
   client registration, authorization-code + consent, bearer-token access. A request without a
   valid bearer → `401` with the protected-resource descriptor. *(IA 2, 3)*
 - Every tool call is **attributed to the token's Account** and enforces the *same* domain
-  invariants as the UI (access matrix, ownership, blob bounds) — the MCP layer is a thin
-  adapter over the existing Hosting + Data commands, adding no new authority. *(AH 9, AD 2)*
+  invariants as the UI (access matrix, ownership) — the MCP layer is a thin adapter over the
+  existing Hosting commands, adding no new authority. *(AH 9)*
 - **Tools:** `create_artefact`, `update_artefact`, `list_artefacts`, `get_artefact`,
-  `set_visibility`, `archive_artefact`, `restore_artefact`, `patch_artefact_data` (S17).
+  `set_visibility`, `archive_artefact`, `restore_artefact`. There is **no data-write tool**
+  (opacity, above). `get_artefact` / `update_artefact` return **`dataAuthorCount`** so the
+  model can warn before a breaking data-shape change and suggest a versioned key or a new
+  artefact. Update never deletes data blobs; it only replaces the HTML payload.
 - A companion **authoring skill** (`skills/artefactor-persistence`) teaches Claude when/how to
   publish + update via the connector and to write HTML that persists through the localStorage
   hijack (keep in sync with `ddd/artefact-data.md`, same no-drift rule as specs).
@@ -460,7 +461,8 @@ OAuth. See the DDD amendment in `ddd/identity-access.md` ("Programmatic access")
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
-**S7 → S15**, **S11 → {S12, S13, S17}**, **{S2, S3, S5, S7, S17} → S18**. S10 can land early
-(right after S2) to give a working surface to iterate against. The data-store branch
-(S11–S13, S17) is independent of the sharing branch and can proceed in parallel once S2
-exists. ~~S8/S9~~ (API keys) are dropped — see the DAG note. S18 is the programmatic surface.
+**S7 → S15**, **S11 → {S12, S13}**, **{S2, S3, S5, S7} → S18**. S10 can land early (right after
+S2) to give a working surface to iterate against. The data-store branch (S11–S13) is
+independent of the sharing branch and can proceed in parallel once S2 exists. ~~S8/S9~~ (API
+keys) and ~~S17~~ (data merge-patch) are dropped — see the DAG note. S18 is the programmatic
+surface.

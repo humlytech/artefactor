@@ -67,29 +67,18 @@ Consumed by **two different clients** — keep them distinct:
 | `GET` | `/api/artefacts/:slug/data/:authorId` | Load one author's blob (for seeding/switching) | host UI; per access matrix |
 | `GET` | `/api/artefacts/:slug/data/me` | The caller's own entry | host/runtime; authenticated |
 | `PUT` | `/api/artefacts/:slug/data/me` | Upsert the caller's blob (full replace) | runtime (shim write-through); authenticated |
-| `PATCH` | `/api/artefacts/:slug/data/me` | Merge a partial blob into the caller's entry (RFC 7396) | programmatic clients (MCP); authenticated |
 | `DELETE` | `/api/artefacts/:slug/data/me` | Remove the caller's entry | authenticated |
 
 The author-listing and per-author endpoints exist **only** to power the host switcher; the
 artefact itself stays opaque and single-dataset.
 
-### Merge-patch semantics (PATCH `/me`)
-
-`PUT` replaces the whole blob; `PATCH` lets a programmatic caller (the MCP connector) update
-**part** of the blob without resending all of it. The request body is a **JSON Merge Patch**
-([RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)) applied to the caller's current blob
-(absent entry = `{}`):
-
-- an object recursively merges key-by-key;
-- a member set to `null` **deletes** that key;
-- any other value replaces the value at that key.
-
-This is the single place the store looks *inside* the blob, so it is constrained: both the
-current blob and the patch must be JSON **objects** (the localStorage keyspace model,
-`{ [key]: value }`, always is). A patch against a non-object blob, or a non-JSON body, is
-rejected (`InvalidBlob` → 400). All other invariants are unchanged — the merged result must
-still be valid JSON within `MAX_BLOB_BYTES` (AD8 → 413), the write is auth'd and to the
-caller's own entry only (AD2/AD3), and an archived/not-viewable artefact is 404 (AD6).
+> **The blob stays opaque — the backend never parses or merges it.** There is deliberately no
+> partial-update (merge-patch) endpoint: a merge would require the backend to interpret the
+> blob's structure, breaking opacity. Writes are whole-blob `PUT`s. When an artefact's data
+> *shape* changes (e.g. the MCP connector replaces its HTML), the backend cannot and does not
+> migrate existing blobs — compatibility is the **artefact's** responsibility (versioned
+> `localStorage` keys; see `skills/artefactor-persistence`), and a genuinely breaking change is
+> best published as a **new artefact** rather than edited in place.
 
 ## Artefact runtime contract
 

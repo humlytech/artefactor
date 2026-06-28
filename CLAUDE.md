@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **The whole Artefact Hosting context plus the Artefact Data store *and its localStorage
 runtime + host data-context switcher* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10,
 S11 (own data blob), S12 (data-context switcher), S13 (localStorage hijack), S14, S15
-(permanent delete), S16 (share with specific people), S17 (data merge-patch), S18 (MCP
-connector + OAuth). The monolith builds, runs, migrates, and tests green. Auth is
+(permanent delete), S16 (share with specific people), S18 (MCP connector + OAuth). The
+monolith builds, runs, migrates, and tests green. Auth is
 wired (`src/server/auth.ts`): email + password via BetterAuth's Drizzle adapter, session
 middleware + `requireAuth` guard, protected `GET /api/me`. Artefact Hosting: Drizzle
 `ArtefactRepository` (`save`/`findById`/`findBySlug`/`listByOwner`/`listShared`), the pure
@@ -31,10 +31,12 @@ adapters in `src/server/adapters.ts`. **Programmatic access (S18)** is a remote 
 bearer (BetterAuth's `mcp` plugin — discovery at `/.well-known/oauth-*`, dynamic client
 registration, authorize/consent/token under `/api/auth/mcp/*`, OIDC tables
 `oauth_application|oauth_access_token|oauth_consent`). Tools in `src/server/mcp/` wrap the
-existing Hosting + Data commands (create/update/list/get/set-visibility/archive/restore +
-`patch_artefact_data`), each attributed to the token's Account. The old **S8/S9** (API-key
-REST push) are **dropped** — the pinned better-auth has no api-key plugin and a raw token API
-was deemed unnecessary. See `docs/specs/fdd/slice-dag.md` implementation notes.
+existing Hosting commands (create/update/list/get/set-visibility/archive/restore), each
+attributed to the token's Account. **Data blobs stay opaque** — there is no data-write tool
+and no merge-patch (a backend merge would break opacity); `get_artefact`/`update_artefact`
+return `dataAuthorCount` so a breaking HTML change can be flagged, and the artefact owns its
+own data-shape compatibility (versioned localStorage keys). The old **S8/S9** (API-key REST
+push) and **S17** (data merge-patch) are **dropped**. See `docs/specs/fdd/slice-dag.md`.
 Development is **spec-driven**: locate the governing
 DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in
 sync in the same change.

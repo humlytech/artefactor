@@ -4,6 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildMcpServer, type McpToolDeps } from "./server";
 import { InMemoryArtefactRepository } from "../../domain/artefact/in-memory-artefact-repository";
 import { InMemoryDataRepository } from "../../domain/data/in-memory-data-repository";
+import { upsertDataEntry } from "../../domain/data/data-entry";
 import type { PayloadStore, StoredPayload } from "../../domain/artefact/ports";
 
 // S18 — the MCP tool surface, exercised through a real in-memory MCP
@@ -74,7 +75,6 @@ describe("MCP artefact tools (S18)", () => {
         "create_artefact",
         "get_artefact",
         "list_artefacts",
-        "patch_artefact_data",
         "restore_artefact",
         "set_visibility",
         "update_artefact",
@@ -164,16 +164,28 @@ describe("MCP artefact tools (S18)", () => {
     );
   });
 
-  it("patch_artefact_data merges into the caller's data blob (RFC 7396)", async () => {
+  it("reports dataAuthorCount so a breaking update can be flagged", async () => {
     const client = await clientFor("u1");
     const a = json(
       await call(client, "create_artefact", { title: "Form", kind: "form", html: "<i>f</i>" }),
     );
-    await call(client, "patch_artefact_data", { id: a.id, patch: { a: 1, b: 2 } });
-    const r = json(
-      await call(client, "patch_artefact_data", { id: a.id, patch: { b: 3, c: 4 } }),
+    // No saved data yet.
+    expect(json(await call(client, "get_artefact", { id: a.id })).dataAuthorCount).toBe(0);
+
+    // Two users save data (the opaque blobs the running artefact persists).
+    await deps.dataRepo.save(
+      upsertDataEntry({ id: "d1", artefactId: a.id, authorId: "u1", blob: "{}" }),
     );
-    expect(JSON.parse(r.blob)).toEqual({ a: 1, b: 3, c: 4 });
+    await deps.dataRepo.save(
+      upsertDataEntry({ id: "d2", artefactId: a.id, authorId: "u2", blob: "{}" }),
+    );
+
+    expect(json(await call(client, "get_artefact", { id: a.id })).dataAuthorCount).toBe(2);
+    // update_artefact carries the same signal in its result.
+    const updated = json(
+      await call(client, "update_artefact", { id: a.id, title: "Form v2" }),
+    );
+    expect(updated.dataAuthorCount).toBe(2);
   });
 
   it("attributes authority to the token's user — cannot touch another user's artefact", async () => {

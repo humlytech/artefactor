@@ -43,18 +43,38 @@ as the user (OAuth), so everything you create is owned by them. Tools:
 - **`update_artefact`** `{ id, title?, kind?, html? }` — replace fields. `html` is a **full
   replacement**, not a patch — send the whole document.
 - **`list_artefacts`** / **`get_artefact`** — find what the user already has (use these before
-  creating a duplicate; update in place when iterating on an existing artefact).
+  creating a duplicate; update in place when iterating on an existing artefact). `get_artefact`
+  returns **`dataAuthorCount`** — how many users have saved data in this artefact.
+
 - **`set_visibility`** / **`archive_artefact`** / **`restore_artefact`** — manage sharing and
   lifecycle.
-- **`patch_artefact_data`** `{ id, patch }` — merge a partial JSON object into the artefact's
-  saved data (the same blob the artefact reads via `localStorage`), using RFC 7396 merge-patch
-  (a `null` value deletes a key). Use this to seed or adjust an artefact's stored state from
-  the outside; the artefact itself still just uses `localStorage` (below).
+
+There is **no tool to write an artefact's saved data.** The per-user data blob is the
+artefact's own runtime state (what it reads/writes via `localStorage`), and Artefactor keeps
+it **opaque** — the backend never reads or rewrites it. You shape and seed it from *inside* the
+HTML, not through the connector.
 
 Typical flow: write the HTML following the rules below → `create_artefact` → share with
 `set_visibility` or by passing `visibility` → iterate with `update_artefact`. When the user
 says "update the X artefact", prefer `list_artefacts`/`get_artefact` + `update_artefact` over
 creating a new one.
+
+### Updating an artefact that already has saved data (breaking changes)
+
+`update_artefact` replaces the HTML but **leaves existing data blobs untouched** — the backend
+won't migrate them (it can't; the data is opaque). So if your new HTML expects a **different
+data shape** than the old one, returning users' saved data may be misread.
+
+Before a shape-changing update, check `dataAuthorCount`. If it's `> 0` and the change is
+breaking, do one of:
+
+- **Bump the storage-key version** in the HTML (`my-artefact-v1` → `-v2`). Old data is simply
+  ignored and the artefact starts fresh — the localStorage-native migration (see rule 2).
+- **Publish a new artefact** (`create_artefact`) — a clean "v2" with its own id, link, and
+  data — when you want to keep the old one intact for existing users.
+
+Non-breaking edits (copy, styling, bug fixes, additive fields your code already tolerates) are
+safe to `update_artefact` in place.
 
 ## Rules
 

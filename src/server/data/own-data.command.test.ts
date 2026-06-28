@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   deleteOwnDataEntry,
   getOwnDataEntry,
-  patchOwnDataEntry,
   putOwnDataEntry,
   type OwnDataDeps,
 } from "./own-data.command";
@@ -143,90 +142,5 @@ describe("own-data commands (S11)", () => {
     await putOwnDataEntry({ ref: "slug1", authorId: OWNER }, "{}", deps);
     await deleteOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps);
     expect(await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps)).toBeNull();
-  });
-
-  describe("patchOwnDataEntry (S17)", () => {
-    it("merges a patch into the existing blob, leaving untouched keys (AD1)", async () => {
-      await seed();
-      await putOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"a":1,"b":2}',
-        deps,
-      );
-      await patchOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"b":3,"c":4}',
-        deps,
-      );
-      expect(
-        JSON.parse(
-          (await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps))!.blob,
-        ),
-      ).toEqual({ a: 1, b: 3, c: 4 });
-    });
-
-    it("creates the entry from {} when none exists yet", async () => {
-      await seed();
-      const e = await patchOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"a":1}',
-        deps,
-      );
-      expect(e.blob).toBe('{"a":1}');
-    });
-
-    it("deletes a key when the patch value is null (RFC 7396)", async () => {
-      await seed();
-      await putOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"a":1,"b":2}',
-        deps,
-      );
-      await patchOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"a":null}',
-        deps,
-      );
-      expect(
-        JSON.parse(
-          (await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps))!.blob,
-        ),
-      ).toEqual({ b: 2 });
-    });
-
-    it("rejects a non-object patch (AD8)", async () => {
-      await seed();
-      await expect(
-        patchOwnDataEntry({ ref: "slug1", authorId: OWNER }, "[1,2]", deps),
-      ).rejects.toBeInstanceOf(InvalidBlob);
-    });
-
-    it("only patches the caller's own entry (AD2)", async () => {
-      await seed("authenticated");
-      await putOwnDataEntry(
-        { ref: "slug1", authorId: OWNER },
-        '{"who":"owner"}',
-        deps,
-      );
-      await patchOwnDataEntry(
-        { ref: "slug1", authorId: "user-2" },
-        '{"who":"two"}',
-        deps,
-      );
-      expect(
-        (await getOwnDataEntry({ ref: "slug1", authorId: OWNER }, deps))?.blob,
-      ).toBe('{"who":"owner"}');
-      expect(
-        (await getOwnDataEntry({ ref: "slug1", authorId: "user-2" }, deps))?.blob,
-      ).toBe('{"who":"two"}');
-    });
-
-    it("is not-found for an archived artefact (AD6)", async () => {
-      const shared = await seed();
-      await artefactRepo.save(archiveArtefact(shared));
-      await expect(
-        patchOwnDataEntry({ ref: "slug1", authorId: OWNER }, "{}", deps),
-      ).rejects.toBeInstanceOf(ArtefactNotFound);
-    });
   });
 });

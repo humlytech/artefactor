@@ -10,7 +10,6 @@ import {
   ArtefactNotFound,
   InvariantViolation,
 } from "../../domain/artefact/errors";
-import { DataError } from "../../domain/data/errors";
 import { createArtefactCommand } from "../artefacts/create-artefact.command";
 import { editArtefactCommand } from "../artefacts/edit-artefact.command";
 import { setArtefactVisibilityCommand } from "../artefacts/set-visibility.command";
@@ -19,7 +18,6 @@ import {
   restoreArtefactCommand,
 } from "../artefacts/lifecycle.command";
 import { loadOwnActiveArtefact } from "../artefacts/get-own-artefact";
-import { patchOwnDataEntry } from "../data/own-data.command";
 import { toArtefactSummary } from "../routes/artefacts";
 import { env } from "../env";
 
@@ -69,11 +67,7 @@ async function run<T>(body: () => Promise<T>) {
   try {
     return ok(await body());
   } catch (err) {
-    if (
-      err instanceof ArtefactNotFound ||
-      err instanceof InvariantViolation ||
-      err instanceof DataError
-    ) {
+    if (err instanceof ArtefactNotFound || err instanceof InvariantViolation) {
       return fail(err.message);
     }
     throw err;
@@ -86,6 +80,17 @@ export function registerArtefactTools(
   deps: McpToolDeps,
 ): void {
   const { repo, payloadStore, dataRepo } = deps;
+
+  // Artefacts accumulate per-user data blobs (what the running artefact reads /
+  // writes via localStorage). The backend treats those blobs as opaque, so it
+  // cannot tell whether an HTML change breaks the data shape — that is the
+  // author's call. We surface how many authors already hold data (`dataAuthorCount`)
+  // so the model can warn and suggest bumping the storage-key version or
+  // publishing a new artefact (v2) on a breaking change. See the authoring skill.
+  const withDataCount = async (a: Artefact) => ({
+    ...summarize(a),
+    dataAuthorCount: (await dataRepo.listAuthorsByArtefact(a.id)).length,
+  });
 
   server.registerTool(
     "create_artefact",
@@ -132,7 +137,7 @@ export function registerArtefactTools(
     {
       title: "Update artefact",
       description:
-        "Replace the title, kind, and/or HTML of an existing artefact you own. The HTML is a full replacement, not a patch.",
+        "Replace the title, kind, and/or HTML of an existing artefact you own (HTML is a full replacement, not a patch). Existing per-user data blobs are left untouched. The result includes dataAuthorCount: if it is > 0 and your HTML change alters the data shape the artefact reads from localStorage, that saved data may be misread — bump the artefact's storage-key version (so old data is ignored) or publish a new artefact (a v2) instead of editing in place.",
       inputSchema: {
         id: z.string().min(1).describe("The artefact id."),
         title: z.string().min(1).optional(),
@@ -156,7 +161,7 @@ export function registerArtefactTools(
           },
           { repo, payloadStore },
         );
-        return summarize(updated);
+        return withDataCount(updated);
       }),
   );
 
@@ -184,13 +189,13 @@ export function registerArtefactTools(
     {
       title: "Get artefact",
       description:
-        "Get one of your active artefacts by id (metadata + share URL). Unknown / not yours / archived → not found.",
+        "Get one of your active artefacts by id (metadata, share URL, and dataAuthorCount — how many users have saved data). Unknown / not yours / archived → not found. Check dataAuthorCount before a breaking update.",
       inputSchema: { id: z.string().min(1) },
     },
     async ({ id }) =>
       run(async () => {
         const a = await loadOwnActiveArtefact(repo, { id, ownerId: userId });
-        return summarize(a);
+        return withDataCount(a);
       }),
   );
 
@@ -246,33 +251,6 @@ export function registerArtefactTools(
           { repo },
         );
         return summarize(updated);
-      }),
-  );
-
-  server.registerTool(
-    "patch_artefact_data",
-    {
-      title: "Patch artefact data",
-      description:
-        "Merge a partial JSON object into your data blob for an artefact (RFC 7396 JSON Merge Patch: a null value deletes a key). This is the data the artefact reads via localStorage. Updates only your own data context.",
-      inputSchema: {
-        id: z
-          .string()
-          .min(1)
-          .describe("The artefact id (or slug) whose data to patch."),
-        patch: z
-          .record(z.string(), z.unknown())
-          .describe("A JSON object merged into the current blob (RFC 7396)."),
-      },
-    },
-    async ({ id, patch }) =>
-      run(async () => {
-        const entry = await patchOwnDataEntry(
-          { ref: id, authorId: userId },
-          JSON.stringify(patch),
-          { artefactRepo: repo, dataRepo },
-        );
-        return { blob: entry.blob, updatedAt: entry.updatedAt.toISOString() };
       }),
   );
 }
