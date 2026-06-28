@@ -9,6 +9,7 @@
     KINDS,
     KIND_ORDER,
     VIS,
+    VIS_ORDER,
     kindMeta,
     type Visibility,
   } from "$lib/format";
@@ -28,6 +29,8 @@
   import AuthScreen from "$lib/components/AuthScreen.svelte";
 
   const SORTS = ["updated", "title", "size"] as const;
+  // Funnel glyph for the "All access" (no specific tier) state of the filter.
+  const FILTER_ICON = ["M22 3H2l8 9.46V19l4 2v-8.54L22 3"];
 
   const session = useSession();
 
@@ -35,6 +38,8 @@
   let view = $state<"dashboard" | "gallery">("dashboard");
   let density = $state<"grid" | "list">("grid");
   let kindFilter = $state<"all" | ArtefactKind>("all");
+  // Orthogonal to kindFilter: narrow by visibility/access tier (S16+).
+  let accessFilter = $state<"all" | Visibility>("all");
   let sort = $state<"updated" | "title" | "size">("updated");
   let query = $state("");
   let archivedOpen = $state(true);
@@ -120,6 +125,7 @@
     sortList(
       owned
         .filter((a) => kindFilter === "all" || a.kind === kindFilter)
+        .filter((a) => accessFilter === "all" || a.visibility === accessFilter)
         .filter((a) => matchesQuery(a.title)),
     ),
   );
@@ -127,17 +133,20 @@
     sortList(
       shared
         .filter((g) => kindFilter === "all" || g.kind === kindFilter)
+        .filter((g) => accessFilter === "all" || g.visibility === accessFilter)
         .filter((g) => matchesQuery(g.title)),
     ),
   );
 
-  // Kind chips with counts, from the active view's base list.
+  // Kind chips with counts, from the active view's base list. Counts are per
+  // dimension (independent of the access filter) so toggling access never makes
+  // a type pill vanish; a zero-result combination is handled by the empty state.
   const kindChips = $derived.by(() => {
     const counts: Record<string, number> = { all: baseList.length };
     for (const k of KIND_ORDER)
       counts[k] = baseList.filter((x) => x.kind === k).length;
     const chips: { key: "all" | ArtefactKind; label: string; count: number }[] = [
-      { key: "all", label: "All", count: counts.all ?? 0 },
+      { key: "all", label: "All types", count: counts.all ?? 0 },
     ];
     for (const k of KIND_ORDER) {
       const n = counts[k] ?? 0;
@@ -146,10 +155,29 @@
     return chips;
   });
 
+  // Access chips, mirroring kindChips but over the visibility tiers. Zero-count
+  // tiers are hidden (so e.g. "private" never shows in "Shared with you", where
+  // it can't appear).
+  const accessChips = $derived.by(() => {
+    const chips: {
+      key: "all" | Visibility;
+      label: string;
+      count: number;
+      icon: string[] | null;
+    }[] = [{ key: "all", label: "All access", count: baseList.length, icon: null }];
+    for (const v of VIS_ORDER) {
+      const n = baseList.filter((x) => x.visibility === v).length;
+      if (n > 0) chips.push({ key: v, label: VIS[v].label, count: n, icon: VIS[v].icon });
+    }
+    return chips;
+  });
+
   const showEmpty = $derived(
     isDash ? visibleOwned.length === 0 : visibleShared.length === 0,
   );
-  const isFiltered = $derived(query.trim() !== "" || kindFilter !== "all");
+  const isFiltered = $derived(
+    query.trim() !== "" || kindFilter !== "all" || accessFilter !== "all",
+  );
   const empty = $derived.by(() => {
     if (isFiltered)
       return {
@@ -180,12 +208,14 @@
   function goDashboard() {
     view = "dashboard";
     kindFilter = "all";
+    accessFilter = "all";
     query = "";
     overlay.close();
   }
   function goGallery() {
     view = "gallery";
     kindFilter = "all";
+    accessFilter = "all";
     query = "";
     overlay.close();
   }
@@ -318,6 +348,7 @@
         toast.show(`“${created.title}” uploaded`, TOAST_ICONS.check);
         view = "dashboard";
         kindFilter = "all";
+        accessFilter = "all";
         query = "";
       }
       uploadOpen = false;
@@ -381,6 +412,49 @@
             </p>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <!-- Access filter (by visibility tier) — compact dropdown -->
+            {#if accessChips.length > 1}
+              {@const cur = accessFilter === "all" ? null : VIS[accessFilter]}
+              <div style="position:relative;">
+                <button
+                  onclick={() => overlay.toggle("access")}
+                  style="display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:9px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;"
+                >
+                  <Icon paths={cur ? cur.icon : FILTER_ICON} size={14} />
+                  {cur ? cur.label : "All access"}
+                  <Icon paths={["M6 9l6 6 6-6"]} size={13} style="color:var(--muted-fg);" />
+                </button>
+                {#if overlay.isOpen("access")}
+                  <div style="position:absolute;right:0;top:40px;z-index:40;min-width:208px;background:var(--card);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-md);padding:5px;animation:af-menu .12s ease;">
+                    {#each accessChips as chip (chip.key)}
+                      {@const active = accessFilter === chip.key}
+                      <button
+                        onclick={() => {
+                          accessFilter = chip.key;
+                          overlay.close();
+                        }}
+                        style="width:100%;display:flex;align-items:center;gap:9px;padding:8px 9px;border:none;background:{active
+                          ? 'var(--accent-soft)'
+                          : 'none'};color:var(--fg);font-size:13px;font-family:inherit;border-radius:7px;cursor:pointer;text-align:left;"
+                      >
+                        <Icon
+                          paths={chip.icon ?? FILTER_ICON}
+                          size={14}
+                          style="flex-shrink:0;color:var(--muted-fg);"
+                        />
+                        <span style="flex:1;{active ? 'font-weight:600;' : ''}">{chip.label}</span>
+                        <span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:999px;background:var(--muted);color:var(--muted-fg);">
+                          {chip.count}
+                        </span>
+                        {#if active}
+                          <Icon paths={["M20 6L9 17l-5-5"]} size={14} width={2.4} color="var(--primary)" style="flex-shrink:0;" />
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
             <!-- Sort -->
             <div style="position:relative;">
               <button
@@ -430,7 +504,7 @@
           </div>
         </div>
 
-        <!-- Kind chips -->
+        <!-- Kind chips (filter by type); access is filtered via the dropdown above. -->
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;">
           {#each kindChips as chip (chip.key)}
             {@const active = kindFilter === chip.key}
