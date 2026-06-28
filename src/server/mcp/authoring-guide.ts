@@ -33,6 +33,11 @@ Reads are synchronous and instant (the server seeds saved data before your scrip
 
 Publishing: use create_artefact to publish, update_artefact to iterate in place (HTML is a full replacement, not a patch), set_visibility to share. Before a breaking data-shape change to an artefact that already has saved data (get_artefact / update_artefact report dataAuthorCount), bump the storage-key version or publish a new artefact — never silently change the shape in place.
 
+IMAGES — there are two ways an artefact reaches Artefactor, and embedded raster images decide which:
+- A) Publish via the connector (create_artefact / update_artefact): you send the HTML directly through the tool call. This works ONLY for artefacts with NO embedded raster images — i.e. no PNG/JPEG photos or screenshots, whether as base64 "data:" URIs or binary. You cannot reliably emit base64 image bytes through a tool argument, so pushing an image-bearing artefact this way will TRUNCATE/CORRUPT it. Anything authored as text is fine: HTML/CSS, inline SVG, CSS-drawn graphics, charts, diagrams. Most artefacts qualify (forms, prototypes, slide decks, interactive docs) — so path A is the common case.
+- B) Manual upload: the human downloads the finished self-contained HTML file and uploads it through the Artefactor web app. This is the path for artefacts that must contain real raster images.
+When an artefact needs images, do NOT silently push it via the connector. Stop and offer the human a choice: (1) recreate the visuals as SVG/CSS — vector, sharp at any size, tiny, fully text-authorable — so it can be published via the connector (path A); or (2) keep the images as base64-embedded raster, in which case you give them the finished self-contained HTML file to download and they publish it via manual upload (path B).
+
 Call get_authoring_guide for the full contract, a ready-to-use template, and the shipping checklist.`;
 
 // Lazily read and cache the full skill body. The frontmatter is stripped so the

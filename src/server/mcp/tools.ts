@@ -98,7 +98,7 @@ export function registerArtefactTools(
     {
       title: "Create artefact",
       description:
-        "Publish a self-contained HTML artefact to Artefactor. Returns the new artefact (id, slug, share URL). Optionally set its visibility; default is private. The HTML must follow Artefactor's persistence contract so any data it saves survives — persist only through localStorage (which Artefactor hijacks to a server-side store); call get_authoring_guide first if you are unsure.",
+        "Publish a self-contained HTML artefact to Artefactor. Returns the new artefact (id, slug, share URL). Optionally set its visibility; default is private. The HTML must follow Artefactor's persistence contract so any data it saves survives — persist only through localStorage (which Artefactor hijacks to a server-side store). Do NOT use this for an artefact with embedded raster images (PNG/JPEG as base64 data: URIs or binary): base64 image bytes can't be sent reliably through a tool call and will be truncated/corrupted — instead offer the user SVG/CSS visuals (publishable here) or manual upload of the self-contained file. Call get_authoring_guide if unsure.",
       inputSchema: {
         title: z.string().min(1).describe("Human-readable title."),
         kind: z
@@ -146,7 +146,7 @@ export function registerArtefactTools(
     {
       title: "Update artefact",
       description:
-        "Replace the title, kind, and/or HTML of an existing artefact you own (HTML is a full replacement, not a patch). Existing per-user data blobs are left untouched. The result includes dataAuthorCount: if it is > 0 and your HTML change alters the data shape the artefact reads from localStorage, that saved data may be misread — bump the artefact's storage-key version (so old data is ignored) or publish a new artefact (a v2) instead of editing in place.",
+        "Replace the title, kind, and/or HTML of an existing artefact you own (HTML is a full replacement, not a patch). As with create_artefact, do NOT send HTML containing embedded raster images (base64/binary PNG/JPEG) — it can't be carried reliably through a tool call; use SVG/CSS visuals or manual upload instead. Existing per-user data blobs are left untouched. The result includes dataAuthorCount: if it is > 0 and your HTML change alters the data shape the artefact reads from localStorage, that saved data may be misread — bump the artefact's storage-key version (so old data is ignored) or publish a new artefact (a v2) instead of editing in place.",
       inputSchema: {
         id: z.string().min(1).describe("The artefact id."),
         title: z.string().min(1).optional(),

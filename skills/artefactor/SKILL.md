@@ -41,6 +41,32 @@ the user** (OAuth), so everything you create is owned by them. Tools:
 share via `set_visibility` (or by passing `visibility`). When the user says "update the X
 artefact", prefer `list_artefacts`/`get_artefact` + `update_artefact` over creating a new one.
 
+### Two publishing paths — and why raster images decide which
+
+An artefact can reach Artefactor two ways, and **embedded raster images** (PNG/JPEG photos or
+screenshots — whether as base64 `data:` URIs or binary) are the deciding factor:
+
+- **Path A — publish via the connector** (`create_artefact` / `update_artefact`). You send the
+  HTML directly through the tool call. This works **only for artefacts with no embedded raster
+  images.** You **cannot reliably emit base64 image bytes through a tool argument** — even a few
+  KB won't reproduce losslessly — so pushing an image-bearing artefact this way **truncates or
+  corrupts it.** Everything authored as text is fine: HTML/CSS, **inline SVG**, CSS-drawn
+  graphics, charts, diagrams. **Most artefacts qualify** (forms, prototypes, slide decks,
+  interactive docs), so path A is the common case.
+- **Path B — manual upload.** The human downloads the finished self-contained HTML file and
+  uploads it through the Artefactor web app. This is the path for artefacts that **must** contain
+  real raster images.
+
+**When an artefact needs images, do not silently push it via the connector.** Stop and give the
+human an explicit choice:
+
+1. **Recreate the visuals as SVG/CSS** — vector, sharp at any size, tiny, and fully
+   text-authorable — so the artefact can be published via the connector (**path A**). Prefer this
+   for chrome, diagrams, icons, logos, and UI frames.
+2. **Keep the images as base64-embedded raster** (the artefact stays a single self-contained HTML
+   file). Then it must go via **path B**: provide the finished HTML file for the human to download
+   and upload manually. Use this when the real pixels matter (photographs, actual screenshots).
+
 **There is no tool to write an artefact's saved data — by design.** The per-user data blob is
 the artefact's own runtime state (what it reads/writes via `localStorage`), and Artefactor
 keeps it **opaque** — the backend never reads or rewrites it. You shape and seed data from
