@@ -106,8 +106,9 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   → session user is the `ownerId` (AH1); `multipart/form-data` with `title`, `kind`, and an
   HTML `payload` file (oversize rejected before buffering); `InvariantViolation → 400`,
   success → `201` `ArtefactSummary`. Adapters constructed once in `routes/index.ts`.
-- **Client** (`App.svelte`): a signed-in upload form (title + kind select from
-  `ARTEFACT_KINDS` + file input) posting the multipart body.
+- **Client** (`App.svelte` + `lib/components/UploadModal.svelte`): a signed-in **Upload dialog**
+  — drag-drop or pick a single `.html` file, title + kind select from `ARTEFACT_KINDS` — posting
+  the multipart body. (This same dialog is the manual-upload "Path B" of the S18 connector.)
 - **Tests:** command unit test with in-memory repo + a recording fake payload store (asserts
   invariants and no orphan payload), plus an end-to-end `artefacts.test.ts` (sign-up → upload
   → 201/401/400 + Drizzle round-trip through the `owner_id` FK).
@@ -128,7 +129,8 @@ image builds and runs locally. **Full detail: [`s0-scaffold.md`](./s0-scaffold.m
   after a successful save (new one cleaned up on rejection — no orphans).
 - **BFF** `PATCH /api/artefacts/:id` (multipart, partial): `ArtefactNotFound → 404`,
   `InvariantViolation → 400`, returns the updated summary.
-- **Client** (`App.svelte`): inline per-row edit (title / kind / optional replacement file).
+- **Client** (`App.svelte` + `UploadModal.svelte`): the same Upload dialog in **edit mode**
+  (title / kind / optional replacement `.html`), opened per row → `PATCH` via `api.update`.
 
 ### S4 — Owner views own artefact — **done**
 - Owner can view their own `active` artefact at any visibility.
@@ -393,7 +395,7 @@ OAuth. See the DDD amendment in `ddd/identity-access.md` ("Programmatic access")
   `ArtefactNotFound`); end-to-end (`active → 400`, `archive → delete → 204` then gone
   everywhere + second delete 404, non-owner 404 / anonymous 401).
 
-### S16 — Share with specific people (`selected` tier + access list)
+### S16 — Share with specific people (`selected` tier + access list) — **done**
 - A 4th visibility tier `selected` shares the artefact with an explicit set of registered
   users. It is a *shared* tier: minting/retaining a slug exactly like `authenticated`/`public`
   (AH 4, 5, 12), but the access matrix grants view only to the owner + members of `sharedWith`
@@ -440,7 +442,7 @@ keys), and a breaking shape change is published as a new artefact. The MCP conne
 exposes **no data-write tool** — it surfaces `dataAuthorCount` so a breaking HTML update can be
 flagged (see S18).
 
-### S18 — MCP connector (remote MCP server + OAuth)
+### S18 — MCP connector (remote MCP server + OAuth) — **done**
 - Artefactor exposes a **remote MCP server** at `POST /mcp` (Streamable HTTP) that Claude
   (claude.ai / Claude design) connects to as a custom connector. *(IA 2)*
 - **OAuth 2.1** via BetterAuth's `mcp` plugin: discovery (`.well-known/oauth-*`), dynamic
@@ -450,13 +452,32 @@ flagged (see S18).
   invariants as the UI (access matrix, ownership) — the MCP layer is a thin adapter over the
   existing Hosting commands, adding no new authority. *(AH 9)*
 - **Tools:** `create_artefact`, `update_artefact`, `list_artefacts`, `get_artefact`,
-  `set_visibility`, `archive_artefact`, `restore_artefact`. There is **no data-write tool**
-  (opacity, above). `get_artefact` / `update_artefact` return **`dataAuthorCount`** so the
-  model can warn before a breaking data-shape change and suggest a versioned key or a new
-  artefact. Update never deletes data blobs; it only replaces the HTML payload.
+  `set_visibility`, `archive_artefact`, `restore_artefact`, and `get_authoring_guide`. There is
+  **no data-write tool** (opacity, above). `get_artefact` / `update_artefact` return
+  **`dataAuthorCount`** so the model can warn before a breaking data-shape change and suggest a
+  versioned key or a new artefact. Update never deletes data blobs; it only replaces the HTML
+  payload.
+- **The connector self-describes its authoring contract**, because connector-only clients (e.g.
+  Claude design) cannot load the `artefactor` Agent Skill. Two channels carry it: the MCP
+  server's **`instructions`** (returned in `initialize` — ambient, present *before* any tool
+  call, so the model has the persistence contract while it is still authoring the HTML) carry a
+  compact summary, and the **`get_authoring_guide`** tool returns the full
+  `skills/artefactor/SKILL.md` body on demand. Both derive from that one skill file
+  (`src/server/mcp/authoring-guide.ts`; the Dockerfile copies `skills/` into the runtime image).
+- **Two publishing paths, because a model cannot carry binary through a tool call.** *Path A* —
+  push HTML via `create_artefact`/`update_artefact` — works only for artefacts with **no embedded
+  raster images** (base64 image bytes can't be emitted reliably in a tool argument; they
+  truncate/corrupt). This is the common case (forms, prototypes, slide decks, interactive docs;
+  HTML/CSS/SVG are fine). *Path B* — the human downloads the self-contained HTML and uploads it
+  via the **S2/S3 manual upload UI** (`UploadModal.svelte`) — is the path for artefacts that need
+  real raster images. The `instructions` + skill tell the model to stop and offer the human a
+  choice (recreate visuals as SVG/CSS → Path A, or keep base64 raster → Path B) rather than
+  silently pushing a broken artefact. Both paths run the same create/edit commands, so invariants
+  are identical.
 - A companion **skill** (`skills/artefactor`) teaches Claude both to publish/update/share via
   the connector and to write HTML that persists through the localStorage hijack (keep in sync
-  with `ddd/artefact-data.md` + the tools in `src/server/mcp/`, same no-drift rule as specs).
+  with `ddd/artefact-data.md`, the tools in `src/server/mcp/`, and the `instructions` summary in
+  `src/server/mcp/authoring-guide.ts` — same no-drift rule as specs).
 
 ## Build order
 

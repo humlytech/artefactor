@@ -2,7 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Hosting + Data contexts complete; MCP connector (S18) added — building feature slices
+## Status: All defined v0.2 slices are built — new work means defining new slices
+
+Every slice in `docs/specs/fdd/slice-dag.md` is **done** (S0–S7, S10–S16, S18; **S8/S9/S17
+dropped**) — the Artefact Hosting and Artefact Data contexts and the MCP connector are all
+complete and the client UI is built. There is **no slice currently "in progress"**: the v0.2
+DAG is exhausted, so the next piece of work starts by **adding a new slice** to the DAG (and its
+governing DDD invariant) before coding, per the spec-driven process below.
 
 **The whole Artefact Hosting context plus the Artefact Data store *and its localStorage
 runtime + host data-context switcher* are complete** — S0, S1, S2, S3, S4, S5, S6, S7, S10,
