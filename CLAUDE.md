@@ -42,6 +42,19 @@ and no merge-patch (a backend merge would break opacity); `get_artefact`/`update
 return `dataAuthorCount` so a breaking HTML change can be flagged, and the artefact owns its
 own data-shape compatibility (versioned localStorage keys). The old **S8/S9** (API-key REST
 push) and **S17** (data merge-patch) are **dropped**. See `docs/specs/fdd/slice-dag.md`.
+
+**The client UI (Svelte SPA, `src/client`) is built and is the human-facing app** — not a stub.
+It provides: sign-in; a dashboard of your owned / "shared with you" / archived artefacts
+(grouped by kind, searchable, filterable by access); the **manual HTML upload** dialog
+(`lib/components/UploadModal.svelte` — drag-drop or pick a **single `.html` file**, set title +
+kind; the same dialog edits an existing artefact by replacing its HTML); the S12 data-context
+switcher; manage-access (`ManageAccessModal.svelte`); and archive / restore / permanent-delete
+(`ConfirmDialog.svelte`). **This manual upload is "Path B" for publishing** — the supported way
+to get an artefact that embeds **raster images** into Artefactor, because the MCP connector
+("Path A") cannot carry base64 image bytes through a tool call. Both paths run the same
+create/edit commands, so invariants are identical. (See the two-path guidance in
+`skills/artefactor/SKILL.md` and the MCP `instructions`.)
+
 Development is **spec-driven**: locate the governing
 DDD invariant and FDD slice before coding, build test-first, and keep spec ↔ tests ↔ code in
 sync in the same change.

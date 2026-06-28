@@ -54,8 +54,9 @@ screenshots — whether as base64 `data:` URIs or binary) are the deciding facto
   graphics, charts, diagrams. **Most artefacts qualify** (forms, prototypes, slide decks,
   interactive docs), so path A is the common case.
 - **Path B — manual upload.** The human downloads the finished self-contained HTML file and
-  uploads it through the Artefactor web app. This is the path for artefacts that **must** contain
-  real raster images.
+  uploads it through the Artefactor web app — open the **Upload** dialog and drag-drop (or pick)
+  the single `.html` file, set its title and kind. (The same dialog also replaces the HTML of an
+  existing artefact.) This is the path for artefacts that **must** contain real raster images.
 
 **When an artefact needs images, do not silently push it via the connector.** Stop and give the
 human an explicit choice:
