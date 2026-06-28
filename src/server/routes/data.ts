@@ -6,6 +6,7 @@ import type { DataRepository } from "../../domain/data/data-repository";
 import {
   deleteOwnDataEntry,
   getOwnDataEntry,
+  patchOwnDataEntry,
   putOwnDataEntry,
   type OwnDataDeps,
 } from "../data/own-data.command";
@@ -103,6 +104,30 @@ export function createDataRoutes(deps: DataRoutesDeps) {
       const entry = await putOwnDataEntry(
         { ref: refOf(c), authorId: ownerId(c) },
         blob,
+        commandDeps,
+      );
+      return c.json<DataEntryResponse>({
+        blob: entry.blob,
+        updatedAt: entry.updatedAt.toISOString(),
+      });
+    } catch (err) {
+      if (err instanceof ArtefactNotFound) return c.notFound();
+      if (err instanceof InvalidBlob) return c.json({ error: err.message }, 400);
+      if (err instanceof BlobTooLarge) return c.json({ error: err.message }, 413);
+      throw err;
+    }
+  });
+
+  // S17 — Merge-patch the caller's blob (RFC 7396). The raw body is a JSON Merge
+  // Patch applied to the current entry (absent = `{}`); lets the MCP connector
+  // update part of the data without resending the whole blob. Same error mapping
+  // as PUT: bad patch / non-object → 400, over-cap merged result → 413.
+  r.patch("/me", requireAuth, async (c) => {
+    const patchBody = await c.req.text();
+    try {
+      const entry = await patchOwnDataEntry(
+        { ref: refOf(c), authorId: ownerId(c) },
+        patchBody,
         commandDeps,
       );
       return c.json<DataEntryResponse>({

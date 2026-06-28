@@ -133,4 +133,43 @@ describe("artefact data store — /data/me (S11)", () => {
     expect((await dataMe(slug, { method: "DELETE", cookie: owner })).status).toBe(204);
     expect(((await (await dataMe(slug, { method: "GET", cookie: owner })).json()) as DataEntryResponse).blob).toBeNull();
   });
+
+  it("merge-patches the caller's blob: merge, null-delete, create, errors (S17)", async () => {
+    const { slug } = await makeShared(owner);
+    // Seed, then PATCH merges + leaves untouched keys.
+    await dataMe(slug, { method: "PUT", body: '{"a":1,"b":2}', cookie: owner });
+    const merged = await dataMe(slug, {
+      method: "PATCH",
+      body: '{"b":3,"c":4}',
+      cookie: owner,
+    });
+    expect(merged.status).toBe(200);
+    expect(JSON.parse(((await merged.json()) as DataEntryResponse).blob!)).toEqual({
+      a: 1,
+      b: 3,
+      c: 4,
+    });
+
+    // null deletes a key (RFC 7396).
+    await dataMe(slug, { method: "PATCH", body: '{"a":null}', cookie: owner });
+    expect(
+      JSON.parse(
+        ((await (await dataMe(slug, { method: "GET", cookie: owner })).json()) as DataEntryResponse)
+          .blob!,
+      ),
+    ).toEqual({ b: 3, c: 4 });
+
+    // PATCH against an artefact with no entry yet creates it from {}.
+    const fresh = await makeShared(owner);
+    const created = await dataMe(fresh.slug, {
+      method: "PATCH",
+      body: '{"x":1}',
+      cookie: owner,
+    });
+    expect(((await created.json()) as DataEntryResponse).blob).toBe('{"x":1}');
+
+    // A non-object patch → 400; unauthenticated → 401.
+    expect((await dataMe(slug, { method: "PATCH", body: "[1,2]", cookie: owner })).status).toBe(400);
+    expect((await dataMe(slug, { method: "PATCH", body: "{}", cookie: null })).status).toBe(401);
+  });
 });

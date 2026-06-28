@@ -6,6 +6,7 @@ import {
   upsertDataEntry,
   type DataEntry,
 } from "../../domain/data/data-entry";
+import { mergePatchBlob } from "../../domain/data/merge-patch";
 import type { DataRepository } from "../../domain/data/data-repository";
 
 // Application commands for S11 — read/write the caller's own data blob. Data is
@@ -74,6 +75,34 @@ export async function putOwnDataEntry(
     artefactId: artefact.id,
     authorId: ref.authorId,
     blob,
+    existing,
+    now: (deps.now ?? (() => new Date()))(),
+  });
+  await deps.dataRepo.save(entry);
+  return entry;
+}
+
+// PATCH own entry — merge a partial blob into the caller's entry via RFC 7396
+// JSON Merge Patch (S17), then upsert. Lets a programmatic caller (the MCP
+// connector) update part of the blob without resending all of it. An absent
+// entry is patched as `{}`. `mergePatchBlob` enforces object-ness (→ InvalidBlob);
+// `upsertDataEntry` enforces the size cap on the merged result (→ BlobTooLarge).
+export async function patchOwnDataEntry(
+  ref: OwnDataRef,
+  patchBody: string,
+  deps: OwnDataDeps,
+): Promise<DataEntry> {
+  const artefact = await resolveViewableArtefact(deps, ref.ref, ref.authorId);
+  const existing = await deps.dataRepo.findByArtefactAndAuthor(
+    artefact.id,
+    ref.authorId,
+  );
+  const merged = mergePatchBlob(existing?.blob ?? null, patchBody);
+  const entry = upsertDataEntry({
+    id: (deps.newId ?? randomUUID)(),
+    artefactId: artefact.id,
+    authorId: ref.authorId,
+    blob: merged,
     existing,
     now: (deps.now ?? (() => new Date()))(),
   });
