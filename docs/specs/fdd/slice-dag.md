@@ -26,7 +26,7 @@ S1 Identity (BetterAuth — email+password for dev; Google OAuth added later)
         │                                  └──► S13 Artefact runtime bootstrap (localStorage hijack, opaque)
         │
         └────────────► S18 MCP connector (remote MCP server + OAuth via BetterAuth `mcp` plugin;
-                              wraps the Hosting commands as tools — needs S2, S3, S5, S7)
+                              wraps the Hosting commands as tools — needs S2, S3, S4, S5, S7, S10)
 
 ~~S8 Issue / revoke API key~~ and ~~S9 API push ingestion~~ are **dropped** — the pinned
 better-auth has no api-key plugin and a raw token API was deemed unnecessary; programmatic
@@ -461,7 +461,8 @@ flagged (see S18).
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
-**S7 → S15**, **S11 → {S12, S13}**, **{S2, S3, S5, S7} → S18**. S10 can land early (right after
+**S7 → S15**, **S11 → {S12, S13}**, **{S2, S3, S4, S5, S7, S10} → S18** (S18's tools expose the
+S4 single-artefact read and the S10 owner list). S10 can land early (right after
 S2) to give a working surface to iterate against. The data-store branch (S11–S13) is
 independent of the sharing branch and can proceed in parallel once S2 exists. ~~S8/S9~~ (API
 keys) and ~~S17~~ (data merge-patch) are dropped — see the DAG note. S18 is the programmatic

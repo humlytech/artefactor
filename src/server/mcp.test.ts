@@ -64,8 +64,7 @@ describe("MCP connector (S18)", () => {
         response_types: ["code"],
       }),
     });
-    // RFC 7591 returns 201 Created (older builds 200) — accept either.
-    expect([200, 201]).toContain(res.status);
+    expect(res.status).toBe(201); // RFC 7591 Created
     const body = (await res.json()) as { client_id?: string };
     expect(body.client_id).toBeTruthy();
   });

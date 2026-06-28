@@ -58,8 +58,10 @@ schema: `oauthApplication`, `oauthAccessToken`, `oauthConsent`).
   the authorization-code flow and presents it as a bearer on every MCP request. The token is
   bound to exactly one Account; **every MCP operation is attributed to that Account** as the
   artefact `ownerId` / data `authorId`, with identical invariants to UI actions.
-- **Dynamic client registration (DCR).** Clients self-register (`/mcp/register`); no manual
-  client provisioning. A registered client must complete the user's consent before it can act.
+- **Dynamic client registration (DCR).** Clients self-register (`/api/auth/mcp/register`); no
+  manual provisioning. Only discovery is rooted at `/.well-known/...`; registration / authorize
+  / token live under `/api/auth/mcp/*`. A registered client completes the user's consent before
+  it can act.
 - **Discovery.** The server advertises OAuth metadata at the well-known endpoints so the
   client can discover the authorization server and protected-resource descriptor.
 - **Revocation = the session/token lifecycle.** Access tokens expire; a token whose

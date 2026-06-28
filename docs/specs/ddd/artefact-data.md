@@ -61,13 +61,16 @@ Consumed by **two different clients** — keep them distinct:
 - **Served artefact** never calls these directly; its persistence flows through the hijacked
   `localStorage`, which the BFF seeds and writes on its behalf.
 
+`:ref` is the artefact's **public slug or its id** — the runtime resolves either (the id form
+addresses a never-shared private artefact; see the S11 implementation notes).
+
 | Method | Path | Purpose | Consumer / access |
 |--------|------|---------|-------------------|
-| `GET` | `/api/artefacts/:slug/data/authors` | List authors who have an entry (id + `updatedAt`) | host UI; per access matrix |
-| `GET` | `/api/artefacts/:slug/data/:authorId` | Load one author's blob (for seeding/switching) | host UI; per access matrix |
-| `GET` | `/api/artefacts/:slug/data/me` | The caller's own entry | host/runtime; authenticated |
-| `PUT` | `/api/artefacts/:slug/data/me` | Upsert the caller's blob (full replace) | runtime (shim write-through); authenticated |
-| `DELETE` | `/api/artefacts/:slug/data/me` | Remove the caller's entry | authenticated |
+| `GET` | `/api/artefacts/:ref/data/authors` | List authors who have an entry (id + `updatedAt`) | host UI; per access matrix |
+| `GET` | `/api/artefacts/:ref/data/:authorId` | Load one author's blob (for seeding/switching) | host UI; per access matrix |
+| `GET` | `/api/artefacts/:ref/data/me` | The caller's own entry | host/runtime; authenticated |
+| `PUT` | `/api/artefacts/:ref/data/me` | Upsert the caller's blob (full replace) | runtime (shim write-through); authenticated |
+| `DELETE` | `/api/artefacts/:ref/data/me` | Remove the caller's entry | authenticated |
 
 The author-listing and per-author endpoints exist **only** to power the host switcher; the
 artefact itself stays opaque and single-dataset.

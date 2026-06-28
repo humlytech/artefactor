@@ -121,14 +121,22 @@ export function registerArtefactTools(
           { ownerId: userId, title, kind, payload: new TextEncoder().encode(html) },
           { repo, payloadStore },
         );
-        const final =
-          visibility && visibility !== "private"
-            ? await setArtefactVisibilityCommand(
-                { artefactId: created.id, requesterId: userId, visibility },
-                { repo },
-              )
-            : created;
-        return summarize(final);
+        if (!visibility || visibility === "private") return summarize(created);
+        // Fold the initial share into create as one logical operation: if the
+        // share fails, roll the just-created artefact back so the tool is
+        // all-or-nothing. (Leaving an orphaned private artefact behind would make
+        // a retrying client create duplicates.) No data entries exist yet.
+        try {
+          const shared = await setArtefactVisibilityCommand(
+            { artefactId: created.id, requesterId: userId, visibility },
+            { repo },
+          );
+          return summarize(shared);
+        } catch (err) {
+          await repo.delete(created.id).catch(() => {});
+          await payloadStore.delete(created.payloadRef).catch(() => {});
+          throw err;
+        }
       }),
   );
 

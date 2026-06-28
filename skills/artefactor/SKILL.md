@@ -52,8 +52,8 @@ won't (and can't) migrate them; the data is opaque to it. So if your new HTML ex
 Before a shape-changing update, check `dataAuthorCount`. If it's `> 0` and the change is
 breaking, do one of:
 
-- **Bump the storage-key version** in the HTML (`my-artefact-v1` → `-v2`). Old data is simply
-  ignored and the artefact starts fresh — the localStorage-native migration (see rule 2).
+- **Bump the storage-key version** in the HTML (`my-artefact-v1` → `my-artefact-v2`). Old data
+  is simply ignored and the artefact starts fresh — the localStorage-native migration (rule 2).
 - **Publish a new artefact** (`create_artefact`) — a clean "v2" with its own id, link, and
   data — when you want to keep the old one intact for existing users.
 
