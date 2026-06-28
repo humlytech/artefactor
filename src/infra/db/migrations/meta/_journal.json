@@ -15,6 +15,13 @@
       "when": 1782429891723,
       "tag": "0001_breezy_onslaught",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782636992218,
+      "tag": "0002_bouncy_stature",
+      "breakpoints": true
     }
   ]
 }

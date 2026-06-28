@@ -50,7 +50,11 @@ export class InMemoryArtefactRepository implements ArtefactRepository {
         (a) =>
           a.status === "active" &&
           a.ownerId !== viewerId &&
-          (a.visibility === "authenticated" || a.visibility === "public"),
+          (a.visibility === "authenticated" ||
+            a.visibility === "public" ||
+            // `selected` shows only to the members it was shared with (AH8/13).
+            (a.visibility === "selected" &&
+              a.sharedWith.includes(viewerId))),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((a) => ({ ...a }));

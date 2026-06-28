@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import type { db as Db } from "./client";
-import { artefact } from "./schema";
+import { artefact, artefactAccess } from "./schema";
 import type { Artefact } from "../../domain/artefact/artefact";
 import type {
   ArtefactRepository,
@@ -11,24 +11,27 @@ type Database = typeof Db;
 type ArtefactRow = typeof artefact.$inferSelect;
 
 // Drizzle/SQLite adapter for the ArtefactRepository port. The aggregate maps
-// 1:1 onto the `artefact` row; the 100 MB HTML payload itself lives on the
-// filesystem (see infra/storage) — the row only carries ref + bytes + hash.
+// 1:1 onto the `artefact` row plus its `selected`-tier access list, which lives
+// in the `artefact_access` join table (S16); the 100 MB HTML payload itself
+// lives on the filesystem (see infra/storage) — the row only carries ref +
+// bytes + hash.
 export class DrizzleArtefactRepository implements ArtefactRepository {
   constructor(private readonly db: Database) {}
 
   // Upsert by id so the same port serves create (S2) and later mutations
-  // (edit/share/archive in S3/S5/S7).
+  // (edit/share/archive in S3/S5/S7), then reconcile the access list (S16).
   async save(a: Artefact): Promise<void> {
     const row = toRow(a);
     await this.db
       .insert(artefact)
       .values(row)
       .onConflictDoUpdate({ target: artefact.id, set: row });
+    await this.syncAccessList(a.id, a.sharedWith);
   }
 
-  // Permanent delete (AH11). The data_entry FK is ON DELETE CASCADE, so the
-  // artefact's data rows are removed with it; the payload file is removed
-  // separately by the delete command.
+  // Permanent delete (AH11). The data_entry and artefact_access FKs are ON
+  // DELETE CASCADE, so the artefact's data + grants are removed with it; the
+  // payload file is removed separately by the delete command.
   async delete(id: string): Promise<void> {
     await this.db.delete(artefact).where(eq(artefact.id, id));
   }
@@ -39,7 +42,7 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .from(artefact)
       .where(eq(artefact.id, id))
       .limit(1);
-    return row ? toAggregate(row) : null;
+    return row ? toAggregate(row, await this.granteesOf(id)) : null;
   }
 
   async findBySlug(slug: string): Promise<Artefact | null> {
@@ -48,7 +51,7 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .from(artefact)
       .where(eq(artefact.publicSlug, slug))
       .limit(1);
-    return row ? toAggregate(row) : null;
+    return row ? toAggregate(row, await this.granteesOf(row.id)) : null;
   }
 
   async listByOwner(
@@ -64,12 +67,20 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
       .from(artefact)
       .where(where)
       .orderBy(desc(artefact.updatedAt));
-    return rows.map(toAggregate);
+    // The owner manages their artefacts' access lists, so populate `sharedWith`.
+    const grantees = await this.granteesByArtefact(rows.map((r) => r.id));
+    return rows.map((r) => toAggregate(r, grantees.get(r.id) ?? []));
   }
 
   async listShared(viewerId: string): Promise<Artefact[]> {
-    // Uses the (status, visibility) index. Cross-owner but excludes the viewer's
-    // own (those live in "Your artefacts"); private never matches.
+    // Cross-owner, active, excluding the viewer's own. `authenticated`/`public`
+    // match outright; a `selected` artefact matches only when the viewer is a
+    // member (via the `artefact_access` subquery). Uses the (status, visibility)
+    // index + the user_id index on the join table.
+    const memberArtefactIds = this.db
+      .select({ id: artefactAccess.artefactId })
+      .from(artefactAccess)
+      .where(eq(artefactAccess.userId, viewerId));
     const rows = await this.db
       .select()
       .from(artefact)
@@ -77,11 +88,84 @@ export class DrizzleArtefactRepository implements ArtefactRepository {
         and(
           eq(artefact.status, "active"),
           ne(artefact.ownerId, viewerId),
-          inArray(artefact.visibility, ["authenticated", "public"]),
+          or(
+            inArray(artefact.visibility, ["authenticated", "public"]),
+            and(
+              eq(artefact.visibility, "selected"),
+              inArray(artefact.id, memberArtefactIds),
+            ),
+          ),
         ),
       )
       .orderBy(desc(artefact.updatedAt));
-    return rows.map(toAggregate);
+    // Recipients don't manage membership and shouldn't see co-members, so the
+    // returned aggregates carry an empty `sharedWith` here (it's unused by the
+    // "Shared with you" view).
+    return rows.map((r) => toAggregate(r, []));
+  }
+
+  // The granted user ids for one artefact, oldest grant first (stable order).
+  private async granteesOf(artefactId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: artefactAccess.userId })
+      .from(artefactAccess)
+      .where(eq(artefactAccess.artefactId, artefactId))
+      .orderBy(artefactAccess.grantedAt);
+    return rows.map((r) => r.userId);
+  }
+
+  // Batch variant for list reads — grantees grouped by artefact id.
+  private async granteesByArtefact(
+    ids: string[],
+  ): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({
+        artefactId: artefactAccess.artefactId,
+        userId: artefactAccess.userId,
+      })
+      .from(artefactAccess)
+      .where(inArray(artefactAccess.artefactId, ids))
+      .orderBy(artefactAccess.grantedAt);
+    for (const r of rows) {
+      const list = out.get(r.artefactId);
+      if (list) list.push(r.userId);
+      else out.set(r.artefactId, [r.userId]);
+    }
+    return out;
+  }
+
+  // Reconcile the persisted grant rows to match the aggregate's `sharedWith`
+  // (S16). Diffs add/remove so unchanged grants keep their `granted_at`.
+  private async syncAccessList(
+    artefactId: string,
+    want: readonly string[],
+  ): Promise<void> {
+    const current = await this.db
+      .select({ userId: artefactAccess.userId })
+      .from(artefactAccess)
+      .where(eq(artefactAccess.artefactId, artefactId));
+    const currentIds = new Set(current.map((r) => r.userId));
+    const wantSet = new Set(want);
+    const toRemove = [...currentIds].filter((id) => !wantSet.has(id));
+    const toAdd = want.filter((id) => !currentIds.has(id));
+    if (toRemove.length > 0) {
+      await this.db
+        .delete(artefactAccess)
+        .where(
+          and(
+            eq(artefactAccess.artefactId, artefactId),
+            inArray(artefactAccess.userId, toRemove),
+          ),
+        );
+    }
+    if (toAdd.length > 0) {
+      const now = new Date();
+      await this.db
+        .insert(artefactAccess)
+        .values(toAdd.map((userId) => ({ artefactId, userId, grantedAt: now })));
+    }
   }
 }
 
@@ -103,13 +187,14 @@ function toRow(a: Artefact): ArtefactRow {
   };
 }
 
-function toAggregate(row: ArtefactRow): Artefact {
+function toAggregate(row: ArtefactRow, sharedWith: string[]): Artefact {
   return {
     id: row.id,
     ownerId: row.ownerId,
     title: row.title,
     kind: row.kind,
     visibility: row.visibility,
+    sharedWith,
     publicSlug: row.publicSlug,
     status: row.status,
     payloadRef: row.payloadRef,

@@ -10,6 +10,9 @@ export interface ListByOwnerOptions {
 // Port: persistence for the Artefact aggregate. The Drizzle adapter (infra/db)
 // and the in-memory test double both implement this.
 export interface ArtefactRepository {
+  // Persists the aggregate, including its `selected`-tier access list
+  // (`sharedWith`) — the adapter syncs the membership set as part of the save
+  // (S16, AH13/14). Reads (`findById`/`findBySlug`/`listByOwner`) populate it.
   save(artefact: Artefact): Promise<void>;
   // Permanently remove an artefact by id (AH11). Archived-only is enforced by
   // the delete command, not here. A no-op if the id does not exist.
@@ -22,8 +25,9 @@ export interface ArtefactRepository {
     options?: ListByOwnerOptions,
   ): Promise<Artefact[]>;
   // Active artefacts shared *to* the viewer — visibility `authenticated` or
-  // `public` — most-recently-updated first. "Shared with you" (S14) means
-  // *others'* artefacts, so the viewer's own are excluded (they live in "Your
-  // artefacts"). Private never appears (AH8).
+  // `public`, plus `selected` artefacts the viewer is a member of (S16) —
+  // most-recently-updated first. "Shared with you" (S14) means *others'*
+  // artefacts, so the viewer's own are excluded (they live in "Your artefacts").
+  // Private never appears (AH8).
   listShared(viewerId: string): Promise<Artefact[]>;
 }

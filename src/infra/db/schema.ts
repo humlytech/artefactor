@@ -5,6 +5,7 @@ import {
   integer,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/sqlite-core";
 
 // ── Identity & Access (S1) ──────────────────────────────────────────────────
@@ -116,7 +117,7 @@ export const artefact = sqliteTable(
       enum: ["prototype", "slide-deck", "form", "interactive-doc", "other"],
     }).notNull(),
     visibility: text("visibility", {
-      enum: ["private", "authenticated", "public"],
+      enum: ["private", "selected", "authenticated", "public"],
     })
       .notNull()
       .default("private"),
@@ -135,6 +136,28 @@ export const artefact = sqliteTable(
     uniqueIndex("artefact_public_slug_uq").on(t.publicSlug),
     index("artefact_owner_idx").on(t.ownerId),
     index("artefact_status_visibility_idx").on(t.status, t.visibility),
+  ],
+);
+
+// Artefact Hosting — the `selected`-tier access list (S16, AH13/14). One row per
+// granted (artefact, user). Membership is consulted only while the artefact's
+// visibility is `selected`, but rows are retained across tier changes. Removed
+// with the artefact via ON DELETE CASCADE; user FK keeps grants referentially
+// sound. Indexed on user_id for the "shared with me" lookup in listShared.
+export const artefactAccess = sqliteTable(
+  "artefact_access",
+  {
+    artefactId: text("artefact_id")
+      .notNull()
+      .references(() => artefact.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    grantedAt: integer("granted_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.artefactId, t.userId] }),
+    index("artefact_access_user_idx").on(t.userId),
   ],
 );
 
