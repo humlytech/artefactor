@@ -77,7 +77,7 @@ artefact itself stays opaque and single-dataset.
 > blob's structure, breaking opacity. Writes are whole-blob `PUT`s. When an artefact's data
 > *shape* changes (e.g. the MCP connector replaces its HTML), the backend cannot and does not
 > migrate existing blobs — compatibility is the **artefact's** responsibility (versioned
-> `localStorage` keys; see `skills/artefactor-persistence`), and a genuinely breaking change is
+> `localStorage` keys; see `skills/artefactor`), and a genuinely breaking change is
 > best published as a **new artefact** rather than edited in place.
 
 ## Artefact runtime contract

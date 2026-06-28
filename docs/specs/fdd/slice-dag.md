@@ -454,9 +454,9 @@ flagged (see S18).
   (opacity, above). `get_artefact` / `update_artefact` return **`dataAuthorCount`** so the
   model can warn before a breaking data-shape change and suggest a versioned key or a new
   artefact. Update never deletes data blobs; it only replaces the HTML payload.
-- A companion **authoring skill** (`skills/artefactor-persistence`) teaches Claude when/how to
-  publish + update via the connector and to write HTML that persists through the localStorage
-  hijack (keep in sync with `ddd/artefact-data.md`, same no-drift rule as specs).
+- A companion **skill** (`skills/artefactor`) teaches Claude both to publish/update/share via
+  the connector and to write HTML that persists through the localStorage hijack (keep in sync
+  with `ddd/artefact-data.md` + the tools in `src/server/mcp/`, same no-drift rule as specs).
 
 ## Build order
 

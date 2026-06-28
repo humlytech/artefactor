@@ -68,10 +68,12 @@ The domain and build plan live in `docs/specs/` and are the **source of truth**:
 - `docs/specs/fdd/slice-dag.md` — the feature slice DAG (S0–S14) and per-slice acceptance
   criteria (the seeds for TDD tests) with build order. `s0-scaffold.md` has the full S0 spec.
 
-`skills/artefactor-persistence/SKILL.md` is an Agent Skill for the **authoring** side
-(claude.ai / Claude design) — it teaches Claude to write artefacts that persist correctly via
-Artefactor's localStorage hijack. It mirrors the runtime contract in
-`docs/specs/ddd/artefact-data.md`; **keep the two in sync** (same no-drift rule as specs).
+`skills/artefactor/SKILL.md` is an Agent Skill for the **authoring + publishing** side
+(claude.ai / Claude design) — it teaches Claude both to **publish/update/share** artefacts via
+the S18 MCP connector and to **write artefacts that persist correctly** via Artefactor's
+localStorage hijack. It mirrors the runtime contract in `docs/specs/ddd/artefact-data.md` and
+the connector tool surface in `src/server/mcp/`; **keep them in sync** (same no-drift rule as
+specs).
 
 Before any change, locate the governing DDD invariant and FDD slice. Keep spec ↔ tests ↔
 code in sync in the same commit.
