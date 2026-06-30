@@ -600,6 +600,24 @@ The core seams the **EE Usage & Quota** context plugs into — all **no-op in OS
 - **Boundary:** **OSS** (the seams sit at the create/edit commands and the S12 shell). The metering,
   plan-aware policy, entitlements, and soft fences are the **EE Usage & Quota** context (EQ1–EQ5).
 
+### S24 — Inject persistence ports into the composition *(enabler; behaviour-preserving)*
+Make the BFF composition accept the domain-port adapters as **injected dependencies**, so a
+superset can wire a different backend (Postgres) without forking the composition. (EE context:
+`ee/docs/specs/ddd/postgres-persistence.md`.)
+- Today `src/server/adapters.ts` builds the SQLite/filesystem adapters as module singletons and
+  `createApiRoutes()` imports them directly. Refactor `createApiRoutes()` and the `/api` route
+  modules to **take the adapter set** (`{ artefactRepository, dataRepository, viewRepository,
+  payloadStore, userDirectory }`) as a parameter; `createApp()` threads it. `adapters.ts` remains
+  the **OSS default set** (SQLite + filesystem), passed by the OSS entry. (The serve + MCP route
+  factories already take injected deps.)
+- **Acceptance:** every existing route/serving/MCP test passes unchanged under the default
+  (SQLite) wiring; a test injecting in-memory/fake adapters into `createApp` exercises the full
+  `/api` surface **without** touching `adapters.ts`/`client.ts`; no route module imports the
+  adapter singleton directly anymore.
+- **Boundary:** **OSS** (the composition lives in core). The Postgres adapter set, pg schema, RLS,
+  and the EE entry that injects them are the EE **Postgres persistence** context. Behaviour-
+  preserving; also a testability win for OSS.
+
 ## Build order
 
 Topological: **S0 → S1 → S2 → {S3, S4, S5, S7, S10, S11}**, **S5 → {S6, S14, S16}**,
@@ -613,4 +631,6 @@ surface. **S19** (retention seam + data pin) depends only on **S3** (the edit/re
 EE *Artefact History* context. **S22** (tenant scope + access-policy seam) depends on the repo +
 serving/access path (**S6/S10/S14**) and **S23** (EE policy seams) on the create/edit commands
 (**S2/S3**) + the S12 shell; both are behaviour-preserving enablers and the sole core dependencies
-of the EE **Tenancy/Organizations** and **Usage & Quota** contexts respectively.
+of the EE **Tenancy/Organizations** and **Usage & Quota** contexts respectively. **S24** (inject
+persistence ports) refactors the composition (**S2 onward**); behaviour-preserving and the sole core
+dependency of the EE **Postgres persistence** context.
