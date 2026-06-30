@@ -4,6 +4,15 @@ import { auth } from "../auth";
 // S24 (auth seam) — the BetterAuth instance type. The composition injects the
 // instance (OSS default = the SQLite-backed `auth` singleton; a superset passes a
 // Postgres-backed one), so no module hardcodes which database auth lives in.
+//
+// This is the concrete OSS `auth` type, which carries the `mcp` plugin's api
+// methods the OAuth-discovery helpers (`oAuthDiscoveryMetadata`, …) require — so
+// it is deliberately *not* loosened to the generic betterAuth return type.
+// BetterAuth's `Auth<O>` is **invariant** in its options `O`: a superset whose
+// auth adds further plugins is a superset at runtime but not structurally
+// provable as assignable, so such a superset casts its instance to this type at
+// its single composition boundary (the cast is sound — the app only calls
+// methods present on both).
 export type AuthInstance = typeof auth;
 
 // The authenticated identity, as surfaced by BetterAuth's session lookup. The
